@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 圆桌派 — 多模型协作讨论台</title>
+    <title>棱镜 — 多AI视角碰撞 · 共识/分歧一目了然</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
@@ -135,6 +135,29 @@
                 transition-duration: 0.01ms !important;
             }
         }
+
+        /* 共识/分歧标签 */
+        .msg-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 10px;
+            font-weight: 600;
+            line-height: 1;
+            white-space: nowrap;
+        }
+        .msg-tag.consensus {
+            background: rgba(16,185,129,0.14);
+            color: #10B981;
+            border: 1px solid rgba(16,185,129,0.35);
+        }
+        .msg-tag.divergence {
+            background: rgba(245,158,11,0.14);
+            color: #F59E0B;
+            border: 1px solid rgba(245,158,11,0.35);
+        }
     </style>
 </head>
 <body class="bg-animated">
@@ -160,8 +183,8 @@
                         <i class="fas fa-comments text-[var(--accent)] text-sm"></i>
                     </div>
                     <div>
-                        <h1 class="font-display text-lg font-700 tracking-tight" style="color:var(--fg);">AI Roundtable</h1>
-                        <p class="text-[10px] tracking-widest uppercase" style="color:var(--muted);">多模型协作讨论台</p>
+                        <h1 class="font-display text-lg font-700 tracking-tight" style="color:var(--fg);">Prism</h1>
+                        <p class="text-[10px] tracking-widest uppercase" style="color:var(--muted);">多AI视角碰撞 · 共识/分歧一目了然</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
@@ -219,6 +242,11 @@
                         <i class="fas fa-rotate-right mr-1"></i>重置
                     </button>
                     <span id="roundInfo" class="ml-auto text-[11px]" style="color:var(--muted);"></span>
+                </div>
+                <!-- 模型选择器（复选框） -->
+                <div class="mb-2 flex items-center gap-3 flex-wrap">
+                    <span class="text-[10px] uppercase tracking-widest" style="color:var(--muted);">参与模型</span>
+                    <div id="modelCheckboxes" class="flex items-center gap-3 flex-wrap"></div>
                 </div>
                 <!-- 输入框 -->
                 <div class="flex gap-2 items-end">
@@ -397,6 +425,38 @@ function init() {
     }
     renderRoleBar();
     renderModelConfigs();
+    renderModelCheckboxes();
+    updateModelStatus();
+}
+
+// ========== 模型复选框选择器 ==========
+function renderModelCheckboxes() {
+    const container = document.getElementById('modelCheckboxes');
+    if (!container) return;
+    // 仅渲染预设的 4 个模型
+    const presetIds = ['deepseek', 'kimi', 'glm', 'qwen'];
+    const list = presetIds
+        .map(id => models.find(m => m.id === id))
+        .filter(Boolean);
+    container.innerHTML = list.map(m => `
+        <label class="flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" data-model-id="${m.id}" ${m.enabled ? 'checked' : ''}
+                ${discussionState.active ? 'disabled' : ''}
+                onchange="onModelCheckboxChange('${m.id}', this.checked)"
+                class="accent-[var(--accent)]">
+            <span class="text-[11px]" style="color:${m.color};"><i class="fas ${m.icon} mr-1"></i>${m.name}</span>
+        </label>
+    `).join('');
+}
+
+function onModelCheckboxChange(modelId, checked) {
+    if (discussionState.active) return;
+    const model = models.find(m => m.id === modelId);
+    if (!model) return;
+    model.enabled = checked;
+    saveModels();
+    renderRoleBar();
+    renderModelConfigs();
     updateModelStatus();
 }
 
@@ -448,6 +508,7 @@ function toggleModelEnable(modelId) {
         model.enabled = !model.enabled;
         saveModels();
         renderRoleBar();
+        renderModelCheckboxes();
         updateModelStatus();
     }
 }
@@ -566,6 +627,7 @@ async function startDiscussion() {
     document.getElementById('sendBtn').innerHTML = '<i class="fas fa-comment mr-1"></i>插话';
     document.getElementById('discussionControls').classList.remove('hidden');
     document.getElementById('discussionControls').classList.add('flex');
+    renderModelCheckboxes();
 
     // 开始讨论循环
     await runDiscussionLoop();
@@ -609,6 +671,14 @@ async function runDiscussionLoop() {
 
     // 讨论结束
     renderMessage({ role: 'system', content: '讨论结束' });
+    // Mock：把最后一条 AI 发言的标签改为「分歧」
+    const lastAi = [...messages].reverse().find(m => m.role === 'assistant');
+    if (lastAi) {
+        const lastEl = document.querySelector(`[data-msg-id="${lastAi.id}"] .msg-tag-slot`);
+        if (lastEl) {
+            lastEl.innerHTML = '<span class="msg-tag divergence" data-tag-type="divergence">分歧 ⚡</span>';
+        }
+    }
     endDiscussion();
 }
 
@@ -625,6 +695,11 @@ async function generateResponse(model, round, simulate) {
 
     const modelColor = model.color;
     const modelIcon = model.icon;
+    // Mock：第一条 AI 发言渲染「共识」标签，最后一条在讨论结束时改为「分歧」
+    const aiCount = messages.filter(m => m.role === 'assistant').length;
+    const initialTag = aiCount === 0
+        ? '<span class="msg-tag consensus" data-tag-type="consensus">共识 💡</span>'
+        : '';
     list.insertAdjacentHTML('beforeend', `
         <div class="msg-enter flex gap-3 mb-4" data-msg-id="${msgId}">
             <div class="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center mt-0.5" style="background:${modelColor}18;color:${modelColor};">
@@ -635,6 +710,7 @@ async function generateResponse(model, round, simulate) {
                     <span class="text-xs font-600" style="color:${modelColor};">${model.name}</span>
                     <span class="text-[10px]" style="color:var(--muted);">第${round}轮</span>
                     <span class="text-[10px] typing-cursor" style="color:var(--muted);">思考中</span>
+                    <span class="ml-auto msg-tag-slot">${initialTag}</span>
                 </div>
                 <div class="px-4 py-2.5 rounded-2xl rounded-tl-md text-sm leading-relaxed" style="background:var(--card);border:1px solid var(--border);">
                     <span class="msg-content"></span>
@@ -805,6 +881,7 @@ function resetDiscussion() {
     document.getElementById('userInput').value = '';
     
     showToast('讨论已重置', 'info');
+    renderModelCheckboxes();
 }
 
 function endDiscussion() {
@@ -813,6 +890,7 @@ function endDiscussion() {
     clearSpeakingIndicators();
     document.getElementById('sendBtn').innerHTML = '<i class="fas fa-paper-plane mr-1"></i>发起';
     document.getElementById('roundInfo').textContent = '';
+    renderModelCheckboxes();
 }
 
 function setTopic(topic) {
@@ -905,6 +983,7 @@ function removeModel(idx) {
 function saveSettings() {
     saveModels();
     renderRoleBar();
+    renderModelCheckboxes();
     updateModelStatus();
     closeSettings();
     showToast('配置已保存', 'success');
@@ -933,7 +1012,7 @@ function exportDiscussion() {
         showToast('暂无讨论内容可导出', 'warning');
         return;
     }
-    let text = `# AI 圆桌派 — 讨论记录\n\n`;
+    let text = `# 棱镜 — 讨论记录\n\n`;
     text += `## 话题：${discussionState.topic || '自由讨论'}\n\n`;
     text += `---\n\n`;
     messages.forEach(msg => {
@@ -949,7 +1028,7 @@ function exportDiscussion() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `AI圆桌派_${new Date().toISOString().slice(0, 10)}.md`;
+    a.download = `棱镜_${new Date().toISOString().slice(0, 10)}.md`;
     a.click();
     URL.revokeObjectURL(url);
     showToast('讨论记录已导出', 'success');

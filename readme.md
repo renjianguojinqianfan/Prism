@@ -19,13 +19,13 @@
 
 ## 🛠️ 技术栈
 
-- **前端**：原生 HTML + CSS + JavaScript（单文件 `lengjing.html`）
+- **前端**：原生 HTML + CSS + JavaScript（单文件 `index.html`）
 - **后端**：FastAPI（`main.py`，待建）
 - **部署**：Render / Vercel
 
 ## 📁 项目结构
 .
-├── lengjing.html # 前端主页面（所有 CSS/JS 内联）
+├── index.html # 前端主页面（所有 CSS/JS 内联）
 ├── AGENTS.md # AI 编程助手指令集
 ├── README.md # 项目说明文档
 ├── main.py # FastAPI 后端入口（待建）
@@ -39,7 +39,7 @@ text
 ### 预览前端
 
 1. 克隆本项目
-2. 右键 `lengjing.html` → 选择「Open with Live Server」
+2. 右键 `index.html` → 选择「Open with Live Server」
 3. 在页面中输入话题，点击「发起」即可体验多 AI 模拟讨论
 
 ### 接入真实模型
