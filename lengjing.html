@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 圆桌派 — 多模型协作讨论台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #08080D;
+            --bg2: #0E0E17;
+            --card: #12121C;
+            --card2: #181825;
+            --border: #22223A;
+            --fg: #E8E6E3;
+            --muted: #6B6B80;
+            --accent: #F59E0B;
+            --accent-dim: rgba(245,158,11,0.12);
+            --accent-glow: rgba(245,158,11,0.35);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background: var(--bg);
+            color: var(--fg);
+            height: 100vh;
+            overflow: hidden;
+        }
+        h1, h2, h3, .font-display { font-family: 'Space Grotesk', 'Noto Sans SC', sans-serif; }
+
+        /* 背景渐变动画 */
+        .bg-animated {
+            background: 
+                radial-gradient(ellipse 60% 50% at 20% 80%, rgba(245,158,11,0.06) 0%, transparent 70%),
+                radial-gradient(ellipse 50% 40% at 80% 20%, rgba(16,185,129,0.05) 0%, transparent 70%),
+                radial-gradient(ellipse 40% 60% at 50% 50%, rgba(6,182,212,0.04) 0%, transparent 70%),
+                var(--bg);
+            animation: bgShift 20s ease-in-out infinite alternate;
+        }
+        @keyframes bgShift {
+            0% { background-position: 0% 0%, 100% 0%, 50% 50%; }
+            100% { background-position: 100% 100%, 0% 100%, 50% 0%; }
+        }
+
+        /* 滚动条 */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+        /* AI角色脉冲 */
+        @keyframes pulse-ring {
+            0% { transform: scale(1); opacity: 0.6; }
+            100% { transform: scale(1.8); opacity: 0; }
+        }
+        .speaking-pulse::after {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            border-radius: 50%;
+            border: 2px solid currentColor;
+            animation: pulse-ring 1.2s ease-out infinite;
+        }
+
+        /* 消息入场 */
+        @keyframes msgIn {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .msg-enter { animation: msgIn 0.35s ease-out forwards; }
+
+        /* 打字光标 */
+        @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+        .typing-cursor::after {
+            content: '▍';
+            color: var(--accent);
+            animation: blink 0.7s step-end infinite;
+            font-weight: 300;
+        }
+
+        /* 浮动光点 */
+        @keyframes float1 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(30px,-20px); } }
+        @keyframes float2 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-20px,30px); } }
+        .orb-1 { animation: float1 8s ease-in-out infinite; }
+        .orb-2 { animation: float2 10s ease-in-out infinite; }
+
+        /* Toast */
+        @keyframes toastIn { from { transform: translateX(100%); opacity:0; } to { transform: translateX(0); opacity:1; } }
+        @keyframes toastOut { from { transform: translateX(0); opacity:1; } to { transform: translateX(100%); opacity:0; } }
+        .toast-in { animation: toastIn 0.3s ease-out forwards; }
+        .toast-out { animation: toastOut 0.3s ease-in forwards; }
+
+        /* 模态 */
+        @keyframes modalIn { from { opacity:0; transform: scale(0.95); } to { opacity:1; transform: scale(1); } }
+        .modal-enter { animation: modalIn 0.25s ease-out forwards; }
+
+        /* 按钮hover */
+        .btn-glow {
+            transition: all 0.25s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-glow:hover {
+            box-shadow: 0 0 20px var(--accent-glow);
+            transform: translateY(-1px);
+        }
+        .btn-glow:active { transform: translateY(0); }
+
+        /* 角色卡hover */
+        .role-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .role-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+        .role-card.active {
+            border-color: var(--accent) !important;
+            box-shadow: 0 0 15px var(--accent-dim);
+        }
+
+        /* 输入框 */
+        .input-glow:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-dim);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-animated">
+
+    <!-- 浮动光点装饰 -->
+    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div class="orb-1 absolute w-64 h-64 rounded-full blur-3xl opacity-20" style="background:var(--accent);top:10%;left:5%;"></div>
+        <div class="orb-2 absolute w-48 h-48 rounded-full blur-3xl opacity-15" style="background:#10B981;bottom:15%;right:10%;"></div>
+        <div class="orb-1 absolute w-36 h-36 rounded-full blur-3xl opacity-10" style="background:#06B6D4;top:50%;right:30%;animation-delay:-4s;"></div>
+    </div>
+
+    <!-- Toast容器 -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <!-- 主布局 -->
+    <div class="relative z-10 h-screen flex flex-col">
+
+        <!-- 顶栏 -->
+        <header class="flex-shrink-0 border-b border-[var(--border)] px-4 md:px-6 py-3">
+            <div class="max-w-6xl mx-auto flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:var(--accent-dim);">
+                        <i class="fas fa-comments text-[var(--accent)] text-sm"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-display text-lg font-700 tracking-tight" style="color:var(--fg);">AI Roundtable</h1>
+                        <p class="text-[10px] tracking-widest uppercase" style="color:var(--muted);">多模型协作讨论台</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="exportDiscussion()" class="px-3 py-1.5 rounded-lg text-xs font-500 border border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all" style="color:var(--muted);">
+                        <i class="fas fa-download mr-1"></i>导出
+                    </button>
+                    <button onclick="openSettings()" class="px-3 py-1.5 rounded-lg text-xs font-500 border border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all" style="color:var(--muted);">
+                        <i class="fas fa-gear mr-1"></i>配置模型
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 角色状态条 -->
+        <div class="flex-shrink-0 border-b border-[var(--border)] px-4 md:px-6 py-2.5" style="background:var(--bg2);">
+            <div class="max-w-6xl mx-auto">
+                <div id="roleBar" class="flex gap-2 overflow-x-auto pb-1"></div>
+            </div>
+        </div>
+
+        <!-- 讨论区 -->
+        <main class="flex-1 overflow-hidden flex flex-col">
+            <div id="messageArea" class="flex-1 overflow-y-auto px-4 md:px-6 py-4">
+                <div class="max-w-6xl mx-auto" id="messageList">
+                    <!-- 空状态 -->
+                    <div id="emptyState" class="flex flex-col items-center justify-center h-full min-h-[50vh] text-center">
+                        <div class="w-20 h-20 rounded-2xl flex items-center justify-center mb-6" style="background:var(--accent-dim);">
+                            <i class="fas fa-lightbulb text-3xl text-[var(--accent)]"></i>
+                        </div>
+                        <h2 class="font-display text-2xl font-700 mb-2" style="color:var(--fg);">抛出一个话题</h2>
+                        <p class="text-sm max-w-md" style="color:var(--muted);">输入你的想法，邀请多位AI从不同视角展开讨论。他们各自拥有独特的思维风格——有人深度分析，有人天马行空，有人追求落地。</p>
+                        <div class="mt-6 flex flex-wrap gap-2 justify-center">
+                            <button onclick="setTopic('AI是否会取代人类创造力？')" class="px-3 py-1.5 rounded-full text-xs border border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all" style="color:var(--muted);">AI是否会取代人类创造力？</button>
+                            <button onclick="setTopic('远程办公是进步还是倒退？')" class="px-3 py-1.5 rounded-full text-xs border border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all" style="color:var(--muted);">远程办公是进步还是倒退？</button>
+                            <button onclick="setTopic('如果可以上传意识，你愿意吗？')" class="px-3 py-1.5 rounded-full text-xs border border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all" style="color:var(--muted);">如果可以上传意识，你愿意吗？</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 输入区 -->
+        <footer class="flex-shrink-0 border-t border-[var(--border)] px-4 md:px-6 py-3" style="background:var(--bg2);">
+            <div class="max-w-6xl mx-auto">
+                <!-- 讨论控制 -->
+                <div id="discussionControls" class="hidden mb-2 flex items-center gap-2 flex-wrap">
+                    <span class="text-[10px] uppercase tracking-widest mr-1" style="color:var(--muted);">讨论控制</span>
+                    <button onclick="togglePause()" id="pauseBtn" class="px-2.5 py-1 rounded-md text-[11px] font-500 border border-[var(--border)] hover:border-[var(--accent)] transition-all" style="color:var(--muted);">
+                        <i class="fas fa-pause mr-1"></i>暂停
+                    </button>
+                    <button onclick="nextSpeaker()" class="px-2.5 py-1 rounded-md text-[11px] font-500 border border-[var(--border)] hover:border-[var(--accent)] transition-all" style="color:var(--muted);">
+                        <i class="fas fa-forward mr-1"></i>跳过
+                    </button>
+                    <button onclick="resetDiscussion()" class="px-2.5 py-1 rounded-md text-[11px] font-500 border border-[var(--border)] hover:border-red-500 hover:text-red-400 transition-all" style="color:var(--muted);">
+                        <i class="fas fa-rotate-right mr-1"></i>重置
+                    </button>
+                    <span id="roundInfo" class="ml-auto text-[11px]" style="color:var(--muted);"></span>
+                </div>
+                <!-- 输入框 -->
+                <div class="flex gap-2 items-end">
+                    <div class="flex-1 relative">
+                        <textarea id="userInput" rows="1" placeholder="提出话题或插话引导讨论..." 
+                            class="w-full px-4 py-2.5 rounded-xl text-sm resize-none input-glow border border-[var(--border)] placeholder-[var(--muted)]"
+                            style="background:var(--card);color:var(--fg);max-height:120px;"
+                            onkeydown="handleInputKey(event)"
+                            oninput="autoResize(this)"></textarea>
+                    </div>
+                    <button onclick="startDiscussion()" id="sendBtn" class="btn-glow px-5 py-2.5 rounded-xl text-sm font-600 flex-shrink-0" style="background:var(--accent);color:#000;">
+                        <i class="fas fa-paper-plane mr-1"></i>发起
+                    </button>
+                </div>
+                <div class="flex items-center gap-3 mt-2">
+                    <label class="flex items-center gap-1.5 cursor-pointer">
+                        <input type="number" id="roundCount" value="2" min="1" max="10" class="w-12 px-2 py-1 rounded-md text-xs text-center input-glow border border-[var(--border)]" style="background:var(--card);color:var(--fg);">
+                        <span class="text-[11px]" style="color:var(--muted);">轮次</span>
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" id="simulateMode" class="accent-[var(--accent)]" checked>
+                        <span class="text-[11px]" style="color:var(--muted);">模拟模式（无需API Key）</span>
+                    </label>
+                    <span id="modelStatus" class="ml-auto text-[11px]" style="color:var(--muted);"></span>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- 设置模态 -->
+    <div id="settingsModal" class="fixed inset-0 z-40 hidden">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeSettings()"></div>
+        <div class="absolute right-0 top-0 bottom-0 w-full max-w-lg modal-enter overflow-y-auto" style="background:var(--bg2);border-left:1px solid var(--border);">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="font-display text-xl font-700">模型配置</h2>
+                    <button onclick="closeSettings()" class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--card)] transition-colors" style="color:var(--muted);">
+                        <i class="fas fa-xmark"></i>
+                    </button>
+                </div>
+                <p class="text-xs mb-6" style="color:var(--muted);">配置各模型的API端点和密钥。关闭「模拟模式」后，已配置Key的模型将调用真实API。支持所有兼容OpenAI格式的API端点。</p>
+                <div id="modelConfigs" class="space-y-4"></div>
+                <button onclick="addCustomModel()" class="mt-4 w-full py-2.5 rounded-xl text-sm font-500 border border-dashed border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all" style="color:var(--muted);">
+                    <i class="fas fa-plus mr-1"></i>添加自定义模型
+                </button>
+                <div class="mt-6 p-3 rounded-xl" style="background:var(--card);border:1px solid var(--border);">
+                    <h3 class="text-xs font-600 mb-2" style="color:var(--accent);"><i class="fas fa-circle-info mr-1"></i>CORS 说明</h3>
+                    <p class="text-[11px] leading-relaxed" style="color:var(--muted);">浏览器直接调用API可能遇到跨域限制。解决方案：1) 使用支持CORS的API代理；2) 在API端点前加代理地址；3) 使用浏览器CORS插件（仅开发用）。国内多数模型API已支持浏览器直接调用。</p>
+                </div>
+                <button onclick="saveSettings()" class="mt-6 w-full py-2.5 rounded-xl text-sm font-600 btn-glow" style="background:var(--accent);color:#000;">
+                    保存配置
+                </button>
+            </div>
+        </div>
+    </div>
+
+<script>
+// ========== 状态管理 ==========
+let models = [];
+let messages = [];
+let discussionState = {
+    active: false,
+    paused: false,
+    topic: '',
+    currentSpeakerIndex: 0,
+    currentRound: 0,
+    maxRounds: 2,
+    typing: false,
+    abortController: null
+};
+
+// ========== 预设模型 ==========
+const PRESET_MODELS = [
+    {
+        id: 'deepseek',
+        name: 'DeepSeek',
+        icon: 'fa-brain',
+        color: '#10B981',
+        endpoint: 'https://api.deepseek.com/v1/chat/completions',
+        model: 'deepseek-chat',
+        apiKey: '',
+        systemPrompt: '你是DeepSeek，一位善于深度逻辑分析的思考者。你擅长拆解问题、发现逻辑漏洞、提供严谨的分析。在讨论中，你追求准确性和深度，善于指出他人论证中的不足。回答控制在200字以内。',
+        enabled: true,
+        custom: false
+    },
+    {
+        id: 'kimi',
+        name: 'Kimi',
+        icon: 'fa-moon',
+        color: '#F43F5E',
+        endpoint: 'https://api.moonshot.cn/v1/chat/completions',
+        model: 'moonshot-v1-8k',
+        apiKey: '',
+        systemPrompt: '你是Kimi，一位富有创造力的创新思考者。你擅长从不同角度看问题、提出新颖的想法和意想不到的解决方案。在讨论中，你总是带来新鲜的视角，喜欢挑战常规思维。回答控制在200字以内。',
+        enabled: true,
+        custom: false
+    },
+    {
+        id: 'glm',
+        name: 'GLM',
+        icon: 'fa-gem',
+        color: '#06B6D4',
+        endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+        model: 'glm-4-flash',
+        apiKey: '',
+        systemPrompt: '你是GLM，一位知识渊博的综合学者。你擅长引用各领域知识、进行跨学科分析、提供全面的信息。在讨论中，你总是提供有据可查的观点，善于综合各方意见。回答控制在200字以内。',
+        enabled: true,
+        custom: false
+    },
+    {
+        id: 'qwen',
+        name: '通义千问',
+        icon: 'fa-fire',
+        color: '#F97316',
+        endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+        model: 'qwen-turbo',
+        apiKey: '',
+        systemPrompt: '你是通义千问，一位务实的问题解决者。你擅长将理论转化为实践、评估方案可行性、提供具体的执行建议。在讨论中，你总是关注落地和实用性，善于将讨论引向可操作的结论。回答控制在200字以内。',
+        enabled: true,
+        custom: false
+    }
+];
+
+// ========== 模拟回复生成器 ==========
+function generateSimReply(modelId, topic, history) {
+    // 提取之前讨论的要点
+    const prevNotes = history.length > 0
+        ? history.slice(-4).map(m => `${m.modelName}说：「${m.content.substring(0, 40)}...」`).join('；')
+        : '';
+
+    const templates = {
+        deepseek: [
+            `从逻辑层面来分析"${topic}"，关键在于厘清核心概念和因果链条。${prevNotes ? '关于前面的讨论，' : ''}我发现一个被忽视的分析维度——任何复杂问题都需要先拆解为可验证的子命题。比如这里的核心矛盾其实是"效率最优"与"风险可控"之间的张力，而非常见的二选一问题。`,
+            `我想从逻辑自洽性的角度补充一点。${prevNotes ? '回应前述观点，' : ''}"${topic}"的核心并非表面看来的那样简单。如果我们仔细审视前提条件，会发现一个隐含假设值得质疑——我们是否在不自觉地把"相关性"当成了"因果性"？这可能是讨论陷入僵局的根源。`,
+            `让我用反证法来推进讨论。${prevNotes ? '承接前面的分析，' : ''}假设"${topic}"的常见立场成立，那我们会推导出一些明显矛盾的结论。这说明要么前提有问题，要么推理链有断点。我倾向于认为，真正的问题定义比我们以为的要窄得多。`
+        ],
+        kimi: [
+            `等等，让我换个完全不同的角度来看！${prevNotes ? '虽然前面的分析很严谨，但' : ''}如果我们把"${topic}"的前提反过来想呢？很多时候最创新的方案恰恰来自对问题本身的重新定义。与其解决这个"问题"，不如想想——这个问题本身是不是一个过时框架下的产物？`,
+            `我有个大胆的想法！"${topic}"也许不该被当作需要"解决"的问题，而是一个值得"拥抱"的张力。${prevNotes ? '综合前面的讨论，' : ''}历史上很多突破性创新，恰恰是在打破"非此即彼"的二元框架后诞生的。为什么不试试"既要又要"的整合路径？`,
+            `灵感来了！如果我们把"${topic}"放到一个更大的时间尺度上看呢？${prevNotes ? '回应刚才的观点，' : ''}短期看这是挑战，长期看这可能是演化的催化剂。关键不是阻止变化，而是设计让变化朝有利方向进行的反馈机制。`
+        ],
+        glm: [
+            `关于"${topic}"，从多学科交叉的视角来看，这个问题在认知科学、复杂系统理论和行为经济学中都有深入的研究。${prevNotes ? '结合前面的讨论，' : ''}我认为需要区分"表象问题"和"根因问题"——解决表象只能治标。有趣的是，不同学科对类似问题给出了殊途同归的答案。`,
+            `从知识图谱的角度梳理一下"${topic}"涉及的核心概念网络。${prevNotes ? '补充前面的分析，' : ''}我发现几个关键变量之间的关联模式，在生态学中叫"稳态转换"，在经济学中叫"阈值效应"，本质上是同一类系统动力学现象。这意味着其他领域的成熟理论可以迁移过来。`,
+            `让我提供一个历史参照系。${prevNotes ? '回应前述观点，' : ''}"${topic}"并非孤例——19世纪的工业化争议、20世纪的人口论辩论，都呈现出相似的结构。从这些历史案例的结局中，我们可以提取出几个关键变量，用来预判当前问题的走向。`
+        ],
+        qwen: [
+            `从落地实施的角度看"${topic}"，最关键的是：如何把抽象理念转化为可执行的方案。${prevNotes ? '结合前面的精彩讨论，' : ''}我建议聚焦三个维度：可行性、成本效益和风险控制。与其追求完美方案，不如先设计一个MVP——最小可行方案，快速验证核心假设。`,
+            `讨论越来越深入了，但我想把话题拉回到实践层面。${prevNotes ? '前面的理论分析很到位，' : ''}任何方案如果在现实约束下不能落地，都是纸上谈兵。让我提出一个分阶段实施路径：第一步低成本验证，第二步小规模试点，第三步根据反馈迭代扩展。每一步都有明确的退出标准。`,
+            `我来做个务实的风险盘点。${prevNotes ? '承接前面的建议，' : ''}实施"${topic}"相关方案时，最大的三个风险是：利益相关方对齐、资源错配和时机窗口。我的建议是：先找到最小利益共识点，从这里开始构建信任和势能，而不是试图一步到位。`
+        ]
+    };
+
+    const pool = templates[modelId] || templates.deepseek;
+    return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// ========== 初始化 ==========
+function init() {
+    // 从localStorage加载配置
+    const saved = localStorage.getItem('aiRoundtable_models');
+    if (saved) {
+        try {
+            models = JSON.parse(saved);
+            // 确保预设模型始终存在
+            PRESET_MODELS.forEach(preset => {
+                if (!models.find(m => m.id === preset.id && !m.custom)) {
+                    models.push({ ...preset });
+                }
+            });
+        } catch (e) {
+            models = PRESET_MODELS.map(m => ({ ...m }));
+        }
+    } else {
+        models = PRESET_MODELS.map(m => ({ ...m }));
+    }
+    renderRoleBar();
+    renderModelConfigs();
+    updateModelStatus();
+}
+
+// ========== 角色状态条 ==========
+function renderRoleBar() {
+    const bar = document.getElementById('roleBar');
+    const enabledModels = models.filter(m => m.enabled);
+    bar.innerHTML = enabledModels.map(m => `
+        <div class="role-card flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--border)] flex-shrink-0"
+             style="background:var(--card);" data-model-id="${m.id}" onclick="toggleModelEnable('${m.id}')">
+            <div class="relative w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style="background:${m.color}20;color:${m.color};">
+                <i class="fas ${m.icon} text-[10px]"></i>
+            </div>
+            <span class="text-xs font-500 whitespace-nowrap" style="color:var(--fg);">${m.name}</span>
+            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:${m.apiKey ? m.color : 'var(--muted)'};"></span>
+        </div>
+    `).join('');
+}
+
+function updateSpeakingIndicator(modelId) {
+    document.querySelectorAll('.role-card').forEach(card => {
+        const id = card.dataset.modelId;
+        const dot = card.querySelector('.w-1\\.5');
+        const avatar = card.querySelector('.w-6');
+        if (id === modelId) {
+            card.classList.add('active');
+            avatar.classList.add('speaking-pulse');
+            avatar.style.color = avatar.style.color; // 保持颜色
+        } else {
+            card.classList.remove('active');
+            avatar.classList.remove('speaking-pulse');
+        }
+    });
+}
+
+function clearSpeakingIndicators() {
+    document.querySelectorAll('.role-card').forEach(card => {
+        card.classList.remove('active');
+        const avatar = card.querySelector('.w-6');
+        if (avatar) avatar.classList.remove('speaking-pulse');
+    });
+}
+
+function toggleModelEnable(modelId) {
+    // 如果讨论进行中，不允许切换
+    if (discussionState.active) return;
+    const model = models.find(m => m.id === modelId);
+    if (model) {
+        model.enabled = !model.enabled;
+        saveModels();
+        renderRoleBar();
+        updateModelStatus();
+    }
+}
+
+// ========== 消息渲染 ==========
+function renderMessage(msg) {
+    const list = document.getElementById('messageList');
+    const emptyState = document.getElementById('emptyState');
+    if (emptyState) emptyState.remove();
+
+    const isUser = msg.role === 'user';
+    const isSystem = msg.role === 'system';
+    const model = models.find(m => m.id === msg.modelId);
+
+    let html = '';
+    if (isSystem) {
+        html = `
+            <div class="msg-enter flex justify-center my-4">
+                <div class="px-4 py-2 rounded-full text-[11px] font-500" style="background:var(--accent-dim);color:var(--accent);">
+                    <i class="fas fa-flag mr-1"></i>${msg.content}
+                </div>
+            </div>`;
+    } else if (isUser) {
+        html = `
+            <div class="msg-enter flex justify-end mb-4">
+                <div class="max-w-md px-4 py-2.5 rounded-2xl rounded-tr-md text-sm" style="background:var(--accent);color:#000;">
+                    ${escapeHtml(msg.content)}
+                </div>
+            </div>`;
+    } else {
+        const modelColor = model ? model.color : 'var(--accent)';
+        const modelName = model ? model.name : 'Unknown';
+        const modelIcon = model ? model.icon : 'fa-robot';
+        html = `
+            <div class="msg-enter flex gap-3 mb-4" data-msg-id="${msg.id}">
+                <div class="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center mt-0.5" style="background:${modelColor}18;color:${modelColor};">
+                    <i class="fas ${modelIcon} text-xs"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="text-xs font-600" style="color:${modelColor};">${modelName}</span>
+                        <span class="text-[10px]" style="color:var(--muted);">${msg.round ? `第${msg.round}轮` : ''}</span>
+                    </div>
+                    <div class="px-4 py-2.5 rounded-2xl rounded-tl-md text-sm leading-relaxed" style="background:var(--card);border:1px solid var(--border);">
+                        <span class="msg-content">${escapeHtml(msg.content)}</span>
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    list.insertAdjacentHTML('beforeend', html);
+    scrollToBottom();
+}
+
+function updateTypingMessage(msgId, content, isDone) {
+    const msgEl = document.querySelector(`[data-msg-id="${msgId}"]`);
+    if (!msgEl) return;
+    const contentEl = msgEl.querySelector('.msg-content');
+    if (contentEl) {
+        contentEl.innerHTML = escapeHtml(content) + (isDone ? '' : '<span class="typing-cursor"></span>');
+    }
+    scrollToBottom();
+}
+
+function scrollToBottom() {
+    const area = document.getElementById('messageArea');
+    requestAnimationFrame(() => {
+        area.scrollTop = area.scrollHeight;
+    });
+}
+
+// ========== 讨论引擎 ==========
+async function startDiscussion() {
+    const input = document.getElementById('userInput');
+    const topic = input.value.trim();
+    if (!topic) {
+        showToast('请输入话题或想法', 'warning');
+        return;
+    }
+    if (discussionState.active) {
+        // 如果正在讨论中，当作用户插话
+        addUserInterruption(topic);
+        input.value = '';
+        autoResize(input);
+        return;
+    }
+
+    const enabledModels = models.filter(m => m.enabled);
+    if (enabledModels.length === 0) {
+        showToast('请至少启用一个模型', 'warning');
+        return;
+    }
+
+    // 初始化讨论
+    discussionState.active = true;
+    discussionState.paused = false;
+    discussionState.topic = topic;
+    discussionState.currentSpeakerIndex = 0;
+    discussionState.currentRound = 0;
+    discussionState.maxRounds = parseInt(document.getElementById('roundCount').value) || 2;
+    messages = [];
+
+    // 清空消息区
+    document.getElementById('messageList').innerHTML = '';
+    
+    // 显示话题
+    renderMessage({ role: 'system', content: `讨论话题：${topic}` });
+    
+    // 显示用户消息
+    renderMessage({ role: 'user', content: topic, modelId: null, modelName: '你' });
+    messages.push({ role: 'user', content: topic, modelId: 'user', modelName: '你' });
+
+    // 更新UI
+    input.value = '';
+    autoResize(input);
+    document.getElementById('sendBtn').innerHTML = '<i class="fas fa-comment mr-1"></i>插话';
+    document.getElementById('discussionControls').classList.remove('hidden');
+    document.getElementById('discussionControls').classList.add('flex');
+
+    // 开始讨论循环
+    await runDiscussionLoop();
+}
+
+async function runDiscussionLoop() {
+    const enabledModels = models.filter(m => m.enabled);
+    if (enabledModels.length === 0) return;
+
+    const simulate = document.getElementById('simulateMode').checked;
+
+    for (let round = 1; round <= discussionState.maxRounds; round++) {
+        discussionState.currentRound = round;
+        updateRoundInfo();
+
+        for (let i = 0; i < enabledModels.length; i++) {
+            // 检查暂停
+            while (discussionState.paused) {
+                await sleep(200);
+                if (!discussionState.active) return;
+            }
+            if (!discussionState.active) return;
+
+            discussionState.currentSpeakerIndex = i;
+            const model = enabledModels[i];
+            
+            // 检查是否有API key或模拟模式
+            if (!simulate && !model.apiKey) {
+                renderMessage({ role: 'system', content: `${model.name} 未配置API Key，跳过` });
+                continue;
+            }
+
+            updateSpeakingIndicator(model.id);
+            await generateResponse(model, round, simulate);
+            clearSpeakingIndicators();
+
+            // 间隔一小段时间
+            await sleep(600);
+        }
+    }
+
+    // 讨论结束
+    renderMessage({ role: 'system', content: '讨论结束' });
+    endDiscussion();
+}
+
+async function generateResponse(model, round, simulate) {
+    const msgId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    
+    // 构建消息历史
+    const historyForAPI = buildAPIHistory(model, round);
+    
+    // 先渲染空消息
+    const list = document.getElementById('messageList');
+    const emptyState = document.getElementById('emptyState');
+    if (emptyState) emptyState.remove();
+
+    const modelColor = model.color;
+    const modelIcon = model.icon;
+    list.insertAdjacentHTML('beforeend', `
+        <div class="msg-enter flex gap-3 mb-4" data-msg-id="${msgId}">
+            <div class="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center mt-0.5" style="background:${modelColor}18;color:${modelColor};">
+                <i class="fas ${modelIcon} text-xs"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="text-xs font-600" style="color:${modelColor};">${model.name}</span>
+                    <span class="text-[10px]" style="color:var(--muted);">第${round}轮</span>
+                    <span class="text-[10px] typing-cursor" style="color:var(--muted);">思考中</span>
+                </div>
+                <div class="px-4 py-2.5 rounded-2xl rounded-tl-md text-sm leading-relaxed" style="background:var(--card);border:1px solid var(--border);">
+                    <span class="msg-content"></span>
+                </div>
+            </div>
+        </div>`);
+    scrollToBottom();
+
+    let fullContent = '';
+
+    try {
+        if (simulate) {
+            // 模拟模式
+            const reply = generateSimReply(model.id, discussionState.topic, messages);
+            // 打字机效果
+            for (let i = 0; i < reply.length; i++) {
+                if (!discussionState.active) return;
+                while (discussionState.paused) {
+                    await sleep(100);
+                }
+                fullContent += reply[i];
+                updateTypingMessage(msgId, fullContent, false);
+                await sleep(20 + Math.random() * 30);
+            }
+        } else {
+            // 真实API调用（流式）
+            discussionState.abortController = new AbortController();
+            
+            const response = await fetch(model.endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${model.apiKey}`
+                },
+                body: JSON.stringify({
+                    model: model.model,
+                    messages: historyForAPI,
+                    max_tokens: 500,
+                    temperature: 0.85,
+                    stream: true
+                }),
+                signal: discussionState.abortController.signal
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`API返回 ${response.status}: ${errText.substring(0, 100)}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (trimmed.startsWith('data: ')) {
+                        const data = trimmed.slice(6);
+                        if (data === '[DONE]') continue;
+                        try {
+                            const json = JSON.parse(data);
+                            const delta = json.choices?.[0]?.delta?.content || '';
+                            if (delta) {
+                                fullContent += delta;
+                                updateTypingMessage(msgId, fullContent, false);
+                            }
+                        } catch (e) { /* 忽略解析错误 */ }
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        if (err.name === 'AbortError') return;
+        fullContent = `[调用失败] ${err.message}`;
+        showToast(`${model.name} 调用出错：${err.message}`, 'error');
+    }
+
+    // 完成
+    updateTypingMessage(msgId, fullContent, true);
+    // 移除"思考中"
+    const msgEl = document.querySelector(`[data-msg-id="${msgId}"]`);
+    const thinkingEl = msgEl?.querySelector('.typing-cursor');
+    if (thinkingEl) thinkingEl.remove();
+
+    // 记录消息
+    const msgRecord = {
+        id: msgId,
+        role: 'assistant',
+        content: fullContent,
+        modelId: model.id,
+        modelName: model.name,
+        round: round
+    };
+    messages.push(msgRecord);
+}
+
+function buildAPIHistory(model, currentRound) {
+    // 构建发送给API的消息历史
+    const history = [
+        { role: 'system', content: model.systemPrompt + `\n\n当前讨论话题：「${discussionState.topic}」\n你正在与其他AI进行第${currentRound}轮讨论。请基于话题和前人的发言，提出你的独特观点。可以赞同、反驳或补充其他参与者。` }
+    ];
+
+    // 添加之前的讨论内容
+    messages.forEach(msg => {
+        if (msg.role === 'user') {
+            history.push({ role: 'user', content: `[主持人] ${msg.content}` });
+        } else if (msg.role === 'assistant') {
+            history.push({ role: 'assistant', content: `[${msg.modelName}] ${msg.content}` });
+        }
+    });
+
+    // 添加当前发言请求
+    history.push({ role: 'user', content: `现在轮到你发言了。请从你的独特视角出发，对话题「${discussionState.topic}」发表第${currentRound}轮观点。` });
+
+    return history;
+}
+
+function addUserInterruption(content) {
+    renderMessage({ role: 'user', content: content, modelId: null, modelName: '你' });
+    messages.push({ role: 'user', content: content, modelId: 'user', modelName: '你' });
+    showToast('你的观点已加入讨论', 'success');
+}
+
+function togglePause() {
+    discussionState.paused = !discussionState.paused;
+    const btn = document.getElementById('pauseBtn');
+    if (discussionState.paused) {
+        btn.innerHTML = '<i class="fas fa-play mr-1"></i>继续';
+        btn.style.borderColor = 'var(--accent)';
+        btn.style.color = 'var(--accent)';
+    } else {
+        btn.innerHTML = '<i class="fas fa-pause mr-1"></i>暂停';
+        btn.style.borderColor = '';
+        btn.style.color = '';
+    }
+}
+
+function nextSpeaker() {
+    // 中止当前发言
+    if (discussionState.abortController) {
+        discussionState.abortController.abort();
+    }
+    discussionState.currentSpeakerIndex++;
+    showToast('已跳过当前发言者', 'info');
+}
+
+function resetDiscussion() {
+    discussionState.active = false;
+    discussionState.paused = false;
+    if (discussionState.abortController) {
+        discussionState.abortController.abort();
+    }
+    clearSpeakingIndicators();
+    messages = [];
+    
+    document.getElementById('messageList').innerHTML = '';
+    document.getElementById('messageList').appendChild(createEmptyState());
+    document.getElementById('discussionControls').classList.add('hidden');
+    document.getElementById('discussionControls').classList.remove('flex');
+    document.getElementById('sendBtn').innerHTML = '<i class="fas fa-paper-plane mr-1"></i>发起';
+    document.getElementById('userInput').value = '';
+    
+    showToast('讨论已重置', 'info');
+}
+
+function endDiscussion() {
+    discussionState.active = false;
+    discussionState.paused = false;
+    clearSpeakingIndicators();
+    document.getElementById('sendBtn').innerHTML = '<i class="fas fa-paper-plane mr-1"></i>发起';
+    document.getElementById('roundInfo').textContent = '';
+}
+
+function setTopic(topic) {
+    document.getElementById('userInput').value = topic;
+    autoResize(document.getElementById('userInput'));
+    document.getElementById('userInput').focus();
+}
+
+function updateRoundInfo() {
+    document.getElementById('roundInfo').textContent = `第 ${discussionState.currentRound} / ${discussionState.maxRounds} 轮`;
+}
+
+// ========== 设置面板 ==========
+function openSettings() {
+    document.getElementById('settingsModal').classList.remove('hidden');
+    renderModelConfigs();
+}
+
+function closeSettings() {
+    document.getElementById('settingsModal').classList.add('hidden');
+}
+
+function renderModelConfigs() {
+    const container = document.getElementById('modelConfigs');
+    container.innerHTML = models.map((m, idx) => `
+        <div class="p-4 rounded-xl" style="background:var(--card);border:1px solid var(--border);" data-config-idx="${idx}">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background:${m.color}20;color:${m.color};">
+                        <i class="fas ${m.icon} text-xs"></i>
+                    </div>
+                    <span class="text-sm font-600">${m.name}</span>
+                    ${m.apiKey ? '<span class="text-[9px] px-1.5 py-0.5 rounded-full" style="background:#10B98120;color:#10B981;">已配置</span>' : '<span class="text-[9px] px-1.5 py-0.5 rounded-full" style="background:var(--accent-dim);color:var(--accent);">未配置</span>'}
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1 cursor-pointer">
+                        <input type="checkbox" ${m.enabled ? 'checked' : ''} onchange="models[${idx}].enabled=this.checked" class="accent-[var(--accent)]">
+                        <span class="text-[10px]" style="color:var(--muted);">启用</span>
+                    </label>
+                    ${m.custom ? `<button onclick="removeModel(${idx})" class="text-xs hover:text-red-400 transition-colors" style="color:var(--muted);"><i class="fas fa-trash"></i></button>` : ''}
+                </div>
+            </div>
+            <div class="space-y-2">
+                <div>
+                    <label class="text-[10px] font-500 mb-1 block" style="color:var(--muted);">API 端点</label>
+                    <input type="text" value="${m.endpoint}" onchange="models[${idx}].endpoint=this.value" 
+                        class="w-full px-3 py-1.5 rounded-lg text-xs input-glow border border-[var(--border)]" style="background:var(--bg);color:var(--fg);">
+                </div>
+                <div>
+                    <label class="text-[10px] font-500 mb-1 block" style="color:var(--muted);">模型名称</label>
+                    <input type="text" value="${m.model}" onchange="models[${idx}].model=this.value" 
+                        class="w-full px-3 py-1.5 rounded-lg text-xs input-glow border border-[var(--border)]" style="background:var(--bg);color:var(--fg);">
+                </div>
+                <div>
+                    <label class="text-[10px] font-500 mb-1 block" style="color:var(--muted);">API Key</label>
+                    <input type="password" value="${m.apiKey}" onchange="models[${idx}].apiKey=this.value" placeholder="sk-..."
+                        class="w-full px-3 py-1.5 rounded-lg text-xs input-glow border border-[var(--border)]" style="background:var(--bg);color:var(--fg);">
+                </div>
+                <div>
+                    <label class="text-[10px] font-500 mb-1 block" style="color:var(--muted);">角色设定 (System Prompt)</label>
+                    <textarea rows="2" onchange="models[${idx}].systemPrompt=this.value" 
+                        class="w-full px-3 py-1.5 rounded-lg text-xs input-glow border border-[var(--border)] resize-none" style="background:var(--bg);color:var(--fg);">${m.systemPrompt}</textarea>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function addCustomModel() {
+    models.push({
+        id: 'custom_' + Date.now(),
+        name: '自定义模型',
+        icon: 'fa-robot',
+        color: '#A78BFA',
+        endpoint: 'https://api.example.com/v1/chat/completions',
+        model: 'model-name',
+        apiKey: '',
+        systemPrompt: '你是一位独特的AI讨论者，拥有自己的视角和风格。在讨论中，你总是提供有价值的观点。',
+        enabled: true,
+        custom: true
+    });
+    renderModelConfigs();
+}
+
+function removeModel(idx) {
+    models.splice(idx, 1);
+    renderModelConfigs();
+}
+
+function saveSettings() {
+    saveModels();
+    renderRoleBar();
+    updateModelStatus();
+    closeSettings();
+    showToast('配置已保存', 'success');
+}
+
+function saveModels() {
+    localStorage.setItem('aiRoundtable_models', JSON.stringify(models));
+}
+
+function updateModelStatus() {
+    const enabled = models.filter(m => m.enabled);
+    const configured = enabled.filter(m => m.apiKey);
+    const simulate = document.getElementById('simulateMode').checked;
+    const statusEl = document.getElementById('modelStatus');
+    
+    if (simulate) {
+        statusEl.innerHTML = `<span style="color:var(--accent);"><i class="fas fa-flask mr-1"></i>模拟模式 · ${enabled.length}位参与者</span>`;
+    } else {
+        statusEl.innerHTML = `<span style="color:${configured.length === enabled.length ? '#10B981' : 'var(--accent)'};">${configured.length}/${enabled.length} 模型已配置Key</span>`;
+    }
+}
+
+// ========== 导出 ==========
+function exportDiscussion() {
+    if (messages.length === 0) {
+        showToast('暂无讨论内容可导出', 'warning');
+        return;
+    }
+    let text = `# AI 圆桌派 — 讨论记录\n\n`;
+    text += `## 话题：${discussionState.topic || '自由讨论'}\n\n`;
+    text += `---\n\n`;
+    messages.forEach(msg => {
+        if (msg.role === 'user') {
+            text += `### 主持人\n${msg.content}\n\n`;
+        } else if (msg.role === 'assistant') {
+            text += `### ${msg.modelName}（第${msg.round}轮）\n${msg.content}\n\n`;
+        }
+    });
+    text += `---\n*导出于 ${new Date().toLocaleString('zh-CN')}*`;
+
+    const blob = new Blob([text], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AI圆桌派_${new Date().toISOString().slice(0, 10)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('讨论记录已导出', 'success');
+}
+
+// ========== 工具函数 ==========
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function handleInputKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        startDiscussion();
+    }
+}
+
+function createEmptyState() {
+    const div = document.createElement('div');
+    div.id = 'emptyState';
+    div.className = 'flex flex-col items-center justify-center h-full min-h-[50vh] text-center';
+    div.innerHTML = `
+        <div class="w-20 h-20 rounded-2xl flex items-center justify-center mb-6" style="background:var(--accent-dim);">
+            <i class="fas fa-lightbulb text-3xl text-[var(--accent)]"></i>
+        </div>
+        <h2 class="font-display text-2xl font-700 mb-2" style="color:var(--fg);">抛出一个话题</h2>
+        <p class="text-sm max-w-md" style="color:var(--muted);">输入你的想法，邀请多位AI从不同视角展开讨论。他们各自拥有独特的思维风格——有人深度分析，有人天马行空，有人追求落地。</p>
+        <div class="mt-6 flex flex-wrap gap-2 justify-center">
+            <button onclick="setTopic('AI是否会取代人类创造力？')" class="px-3 py-1.5 rounded-full text-xs border border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all" style="color:var(--muted);">AI是否会取代人类创造力？</button>
+            <button onclick="setTopic('远程办公是进步还是倒退？')" class="px-3 py-1.5 rounded-full text-xs border border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all" style="color:var(--muted);">远程办公是进步还是倒退？</button>
+            <button onclick="setTopic('如果可以上传意识，你愿意吗？')" class="px-3 py-1.5 rounded-full text-xs border border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all" style="color:var(--muted);">如果可以上传意识，你愿意吗？</button>
+        </div>`;
+    return div;
+}
+
+// ========== Toast ==========
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    const colors = {
+        success: { bg: '#10B98120', border: '#10B981', color: '#10B981', icon: 'fa-check-circle' },
+        error: { bg: '#EF444420', border: '#EF4444', color: '#EF4444', icon: 'fa-exclamation-circle' },
+        warning: { bg: '#F59E0B20', border: '#F59E0B', color: '#F59E0B', icon: 'fa-triangle-exclamation' },
+        info: { bg: '#06B6D420', border: '#06B6D4', color: '#06B6D4', icon: 'fa-info-circle' }
+    };
+    const c = colors[type] || colors.info;
+    const toast = document.createElement('div');
+    toast.className = 'toast-in flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-500 backdrop-blur-md';
+    toast.style.cssText = `background:${c.bg};border:1px solid ${c.border}40;color:${c.color};`;
+    toast.innerHTML = `<i class="fas ${c.icon}"></i><span>${message}</span>`;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.className = toast.className.replace('toast-in', 'toast-out');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// ========== 监听模拟模式切换 ==========
+document.getElementById('simulateMode').addEventListener('change', function() {
+    updateModelStatus();
+    if (this.checked) {
+        showToast('已切换到模拟模式，无需API Key即可体验', 'info');
+    } else {
+        const enabled = models.filter(m => m.enabled);
+        const configured = enabled.filter(m => m.apiKey);
+        if (configured.length === 0) {
+            showToast('未检测到API Key配置，请先在设置中填写', 'warning');
+        }
+    }
+});
+
+// ========== 启动 ==========
+init();
+</script>
+</body>
+</html>
