@@ -15,7 +15,7 @@
 - **模拟 / 真实模式切换**：无需 API Key 即可体验，也可接入真实模型
 - **模型自由开关**：用户可自主选择参与讨论的模型
 - **讨论记录导出**：一键导出 Markdown 格式讨论记录
-- **共识 / 分歧自动标注**（规划中）：自动识别并标注观点共识与分歧
+- **共识 / 分歧自动标注**：讨论结束后自动分析每条发言，并在气泡右上角标注「共识 💡 / 分歧 ⚡ / 中立 ·」
 
 ## 🛠️ 技术栈
 
@@ -48,6 +48,22 @@ text
 2. 填写各模型的 API Key
 3. 关闭「模拟模式」开关
 4. 发起讨论，即可调用真实模型 API
+
+### 启动后端（共识/分歧真实分析）
+
+后端提供 `/api/analyze` 接口，前端讨论结束后会自动调用；未启动时会自动回退到前端本地启发式分析（无感切换，并提示 toast）。
+
+```bash
+# 安装依赖（建议使用虚拟环境）
+pip install -r requirements.txt
+
+# 启动后端（默认端口 8000）
+uvicorn main:app --reload --port 8000
+```
+
+- 健康检查：浏览器访问 [http://localhost:8000/api/health](http://localhost:8000/api/health) 应返回 `{"status":"ok"}`
+- 前端默认指向 `http://localhost:8000/api/analyze`，如需修改请直接编辑 `index.html` 中的 `ANALYZE_ENDPOINT` 常量
+- 环境变量参考 `.env.example`
 
 ## 📝 参赛信息
 
