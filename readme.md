@@ -1,38 +1,46 @@
 # 棱镜 (Prism)
 
-> 多 AI 讨论台 — 一个问题，多个视角，共识与分歧一目了然。
+> 多AI视角碰撞 · 共识/分歧一目了然
 
 ## ✨ 项目简介
 
-「棱镜」是一个多 AI 讨论台。用户输入一个问题，可同时唤起 DeepSeek、Kimi、GLM 等多个 AI 模型进行圆桌讨论。名字取自“一束白光通过棱镜折射出七色光谱”——一个问题进入，多个 AI 从不同视角折射出各自的观点。
+「棱镜」是一个多 AI 讨论台。用户输入一个问题，可同时唤起 DeepSeek、Kimi、GLM、通义千问等多个 AI 模型进行圆桌讨论。名字取自“一束白光通过棱镜折射出七色光谱”——一个问题进入，多个 AI 从不同视角折射出各自的观点。
 
-**当前状态**：前端 Demo 已完成，支持模拟讨论与真实 API 调用。
+**当前状态**：前端 Demo 已完成，支持模拟讨论与真实 API 调用；FastAPI 后端已提供共识/分歧分析端点。
 
 ## 🎯 核心功能
 
 - **一次提问，多方 AI 并行回答**：用户提出问题后，多个模型同时参与讨论
 - **深色赛博朋克 UI**：沉浸式群聊界面，带发光动效
 - **模拟 / 真实模式切换**：无需 API Key 即可体验，也可接入真实模型
-- **模型自由开关**：用户可自主选择参与讨论的模型
+- **模型复选框选择器**：输入框上方复选框自由勾选参与讨论的模型，默认全选
 - **讨论记录导出**：一键导出 Markdown 格式讨论记录
 - **共识 / 分歧自动标注**：讨论结束后自动分析每条发言，并在气泡右上角标注「共识 💡 / 分歧 ⚡ / 中立 ·」
 
 ## 🛠️ 技术栈
 
 - **前端**：原生 HTML + CSS + JavaScript（单文件 `index.html`）
-- **后端**：FastAPI（`main.py`，待建）
+- **后端**：FastAPI（`main.py`），提供 `GET /api/health` 健康检查与 `POST /api/analyze` 共识/分歧分析端点
 - **部署**：Render / Vercel
 
 ## 📁 项目结构
-.
-├── index.html # 前端主页面（所有 CSS/JS 内联）
-├── AGENTS.md # AI 编程助手指令集
-├── README.md # 项目说明文档
-├── main.py # FastAPI 后端入口（待建）
-├── requirements.txt # Python 依赖（待建）
-└── .env # 环境变量（API Key 等，不提交 Git）
 
-text
+```
+.
+├── index.html              # 前端主页面（所有 CSS/JS 内联）
+├── main.py                 # FastAPI 后端入口（健康检查 + 共识/分歧分析）
+├── requirements.txt        # Python 依赖（fastapi、uvicorn、pydantic）
+├── .env.example            # 环境变量示例（占位，无真实 Key）
+├── .env                    # 环境变量（用户本地创建，不提交 Git）
+├── .gitignore              # Git 忽略规则
+├── AGENTS.md               # AI 编程助手指令集
+├── README.md               # 项目说明文档
+└── .trae/specs/            # Spec 驱动开发的规格文档
+    └── add-real-consensus-analysis/
+        ├── spec.md
+        ├── tasks.md
+        └── checklist.md
+```
 
 ## 🚀 快速开始
 

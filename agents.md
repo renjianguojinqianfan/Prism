@@ -5,11 +5,11 @@
 ## 1. 项目快照
 
 - **项目名称**：棱镜 (Prism)
-- **一句话描述**：多 AI 讨论台。用户提问后，DeepSeek、Kimi、GLM 三个模型同时参与讨论，自动标注观点的"共识"与"分歧"。
+- **一句话描述**：多 AI 讨论台。用户提问后，DeepSeek、Kimi、GLM、通义千问四个模型同时参与讨论，自动标注观点的"共识"与"分歧"。
 - **项目类型**：`web`
 - **技术栈**：
   - 前端：原生 HTML + CSS + JavaScript（单文件 `index.html`）
-  - 后端：FastAPI（`main.py`，待建）
+  - 后端：FastAPI（`main.py`），提供 `GET /api/health` 与 `POST /api/analyze` 共识/分歧分析端点
   - 部署：Render / Vercel
   - 模型调用：火山引擎 Coding Plan Pro
 
@@ -32,9 +32,12 @@
 | 文件 | 用途 |
 |------|------|
 | `index.html` | 前端主页面（所有 CSS/JS 内联） |
-| `main.py` | FastAPI 后端入口（待建） |
-| `requirements.txt` | Python 依赖（待建） |
+| `main.py` | FastAPI 后端入口（健康检查 + 共识/分歧分析） |
+| `requirements.txt` | Python 依赖（fastapi、uvicorn、pydantic） |
+| `.env.example` | 环境变量示例（占位，无真实 Key） |
 | `.env` | 环境变量（API Key 等），存放于项目根目录，禁止提交 |
+| `.gitignore` | Git 忽略规则 |
+| `.trae/specs/` | Spec 驱动开发的规格文档（spec.md / tasks.md / checklist.md） |
 
 ## 4. Git 提交规范
 
