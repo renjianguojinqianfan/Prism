@@ -8,7 +8,7 @@
 - **一句话描述**：多 AI 讨论台。用户提问后，DeepSeek、Kimi、GLM、通义千问四个模型同时参与讨论，自动标注观点的"共识"与"分歧"。
 - **项目类型**：`web`
 - **技术栈**：
-  - 前端：原生 HTML + CSS + JavaScript（单文件 `index.html`）
+  - 前端：原生 HTML + CSS + JavaScript（单文件 `index.html`），引入 marked.js（CDN）用于 Markdown 渲染
   - 后端：FastAPI（`main.py`），提供 `GET /api/health` 与 `POST /api/analyze` 共识/分歧分析端点
   - 部署：Render / Vercel
   - 模型调用：火山引擎 Coding Plan Pro

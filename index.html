@@ -163,7 +163,46 @@
             color: #A1A1B5;
             border: 1px solid rgba(107,107,128,0.40);
         }
+        /* AI 气泡内 Markdown 渲染适配 */
+        .msg-content p { margin: 0.3em 0; }
+        .msg-content p:first-child { margin-top: 0; }
+        .msg-content p:last-child { margin-bottom: 0; }
+        .msg-content ul, .msg-content ol { margin: 0.3em 0; padding-left: 1.4em; }
+        .msg-content li { margin: 0.15em 0; }
+        .msg-content code {
+            background: rgba(255,255,255,0.08);
+            padding: 0.1em 0.35em;
+            border-radius: 4px;
+            font-size: 0.88em;
+            font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        }
+        .msg-content pre {
+            background: rgba(0,0,0,0.35);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.7em 0.9em;
+            overflow-x: auto;
+            margin: 0.5em 0;
+        }
+        .msg-content pre code { background: none; padding: 0; font-size: 0.85em; }
+        .msg-content strong { font-weight: 600; }
+        .msg-content blockquote {
+            border-left: 3px solid var(--accent);
+            padding-left: 0.8em;
+            margin: 0.4em 0;
+            color: var(--muted);
+        }
+        .msg-content h1, .msg-content h2, .msg-content h3 {
+            font-weight: 600;
+            margin: 0.5em 0 0.3em;
+            line-height: 1.3;
+        }
+        .msg-content h1 { font-size: 1.15em; }
+        .msg-content h2 { font-size: 1.08em; }
+        .msg-content h3 { font-size: 1em; }
+        .msg-content a { color: var(--accent); text-decoration: underline; }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body class="bg-animated">
 
@@ -376,37 +415,43 @@ const PRESET_MODELS = [
 ];
 
 // ========== 模拟回复生成器 ==========
-function generateSimReply(modelId, topic, history) {
-    // 提取之前讨论的要点
-    const prevNotes = history.length > 0
-        ? history.slice(-4).map(m => `${m.modelName}说：「${m.content.substring(0, 40)}...」`).join('；')
-        : '';
+function generateSimReply(modelId, topic, history, round) {
+    // 提取之前讨论的要点：取最近一条 AI 发言的实质内容（前 60 字）
+    const prevAi = [...history].reverse().find(m => m.role === 'assistant');
+    let lastSpeaker = '';
+    let lastPoint = '';
+    if (prevAi) {
+        lastSpeaker = prevAi.modelName || '前述模型';
+        lastPoint = prevAi.content.replace(/\s+/g, '').slice(0, 60);
+    }
+    const prevNotes = lastSpeaker ? `刚才${lastSpeaker}提到「${lastPoint}」` : '';
 
     const templates = {
         deepseek: [
-            `从逻辑层面来分析"${topic}"，关键在于厘清核心概念和因果链条。${prevNotes ? '关于前面的讨论，' : ''}我发现一个被忽视的分析维度——任何复杂问题都需要先拆解为可验证的子命题。比如这里的核心矛盾其实是"效率最优"与"风险可控"之间的张力，而非常见的二选一问题。`,
-            `我想从逻辑自洽性的角度补充一点。${prevNotes ? '回应前述观点，' : ''}"${topic}"的核心并非表面看来的那样简单。如果我们仔细审视前提条件，会发现一个隐含假设值得质疑——我们是否在不自觉地把"相关性"当成了"因果性"？这可能是讨论陷入僵局的根源。`,
-            `让我用反证法来推进讨论。${prevNotes ? '承接前面的分析，' : ''}假设"${topic}"的常见立场成立，那我们会推导出一些明显矛盾的结论。这说明要么前提有问题，要么推理链有断点。我倾向于认为，真正的问题定义比我们以为的要窄得多。`
+            `从逻辑层面来分析"${topic}"，关键在于厘清核心概念和因果链条。${prevNotes ? `回应${prevNotes}，` : ''}我发现一个被忽视的分析维度——任何复杂问题都需要先拆解为可验证的子命题。比如这里的核心矛盾其实是"效率最优"与"风险可控"之间的张力，而非常见的二选一问题。`,
+            `让我用反证法来推进讨论。${prevNotes ? `承接${prevNotes}，` : ''}假设"${topic}"的常见立场成立，那我们会推导出一些明显矛盾的结论。这说明要么前提有问题，要么推理链有断点。我倾向于认为，真正的问题定义比我们以为的要窄得多，需要重新框定。`,
+            `我想从逻辑自洽性的角度补充一点。${prevNotes ? `针对${prevNotes}，` : ''}"${topic}"的核心并非表面看来的那样简单。如果我们仔细审视前提条件，会发现一个隐含假设值得质疑——我们是否在不自觉地把"相关性"当成了"因果性"？这可能是讨论陷入僵局的根源。`
         ],
         kimi: [
-            `等等，让我换个完全不同的角度来看！${prevNotes ? '虽然前面的分析很严谨，但' : ''}如果我们把"${topic}"的前提反过来想呢？很多时候最创新的方案恰恰来自对问题本身的重新定义。与其解决这个"问题"，不如想想——这个问题本身是不是一个过时框架下的产物？`,
-            `我有个大胆的想法！"${topic}"也许不该被当作需要"解决"的问题，而是一个值得"拥抱"的张力。${prevNotes ? '综合前面的讨论，' : ''}历史上很多突破性创新，恰恰是在打破"非此即彼"的二元框架后诞生的。为什么不试试"既要又要"的整合路径？`,
-            `灵感来了！如果我们把"${topic}"放到一个更大的时间尺度上看呢？${prevNotes ? '回应刚才的观点，' : ''}短期看这是挑战，长期看这可能是演化的催化剂。关键不是阻止变化，而是设计让变化朝有利方向进行的反馈机制。`
+            `等等，让我换个完全不同的角度来看！${prevNotes ? `虽然${prevNotes}，但` : ''}如果我们把"${topic}"的前提反过来想呢？很多时候最创新的方案恰恰来自对问题本身的重新定义。与其解决这个"问题"，不如想想——这个问题本身是不是一个过时框架下的产物？`,
+            `灵感来了！如果我们把"${topic}"放到一个更大的时间尺度上看呢？${prevNotes ? `回应${prevNotes}，` : ''}短期看这是挑战，长期看这可能是演化的催化剂。关键不是阻止变化，而是设计让变化朝有利方向进行的反馈机制。`,
+            `我有个大胆的想法！"${topic}"也许不该被当作需要"解决"的问题，而是一个值得"拥抱"的张力。${prevNotes ? `综合${prevNotes}，` : ''}历史上很多突破性创新，恰恰是在打破"非此即彼"的二元框架后诞生的。为什么不试试"既要又要"的整合路径？`
         ],
         glm: [
-            `关于"${topic}"，从多学科交叉的视角来看，这个问题在认知科学、复杂系统理论和行为经济学中都有深入的研究。${prevNotes ? '结合前面的讨论，' : ''}我认为需要区分"表象问题"和"根因问题"——解决表象只能治标。有趣的是，不同学科对类似问题给出了殊途同归的答案。`,
-            `从知识图谱的角度梳理一下"${topic}"涉及的核心概念网络。${prevNotes ? '补充前面的分析，' : ''}我发现几个关键变量之间的关联模式，在生态学中叫"稳态转换"，在经济学中叫"阈值效应"，本质上是同一类系统动力学现象。这意味着其他领域的成熟理论可以迁移过来。`,
-            `让我提供一个历史参照系。${prevNotes ? '回应前述观点，' : ''}"${topic}"并非孤例——19世纪的工业化争议、20世纪的人口论辩论，都呈现出相似的结构。从这些历史案例的结局中，我们可以提取出几个关键变量，用来预判当前问题的走向。`
+            `关于"${topic}"，从多学科交叉的视角来看，这个问题在认知科学、复杂系统理论和行为经济学中都有深入的研究。${prevNotes ? `结合${prevNotes}，` : ''}我认为需要区分"表象问题"和"根因问题"——解决表象只能治标。有趣的是，不同学科对类似问题给出了殊途同归的答案。`,
+            `让我提供一个历史参照系。${prevNotes ? `对照${prevNotes}，` : ''}"${topic}"并非孤例——19世纪的工业化争议、20世纪的人口论辩论，都呈现出相似的结构。从这些历史案例的结局中，我们可以提取出几个关键变量，用来预判当前问题的走向。`,
+            `从知识图谱的角度梳理一下"${topic}"涉及的核心概念网络。${prevNotes ? `补充${prevNotes}，` : ''}我发现几个关键变量之间的关联模式，在生态学中叫"稳态转换"，在经济学中叫"阈值效应"，本质上是同一类系统动力学现象。这意味着其他领域的成熟理论可以迁移过来。`
         ],
         qwen: [
-            `从落地实施的角度看"${topic}"，最关键的是：如何把抽象理念转化为可执行的方案。${prevNotes ? '结合前面的精彩讨论，' : ''}我建议聚焦三个维度：可行性、成本效益和风险控制。与其追求完美方案，不如先设计一个MVP——最小可行方案，快速验证核心假设。`,
-            `讨论越来越深入了，但我想把话题拉回到实践层面。${prevNotes ? '前面的理论分析很到位，' : ''}任何方案如果在现实约束下不能落地，都是纸上谈兵。让我提出一个分阶段实施路径：第一步低成本验证，第二步小规模试点，第三步根据反馈迭代扩展。每一步都有明确的退出标准。`,
-            `我来做个务实的风险盘点。${prevNotes ? '承接前面的建议，' : ''}实施"${topic}"相关方案时，最大的三个风险是：利益相关方对齐、资源错配和时机窗口。我的建议是：先找到最小利益共识点，从这里开始构建信任和势能，而不是试图一步到位。`
+            `从落地实施的角度看"${topic}"，最关键的是：如何把抽象理念转化为可执行的方案。${prevNotes ? `结合${prevNotes}，` : ''}我建议聚焦三个维度：可行性、成本效益和风险控制。与其追求完美方案，不如先设计一个MVP——最小可行方案，快速验证核心假设。`,
+            `讨论越来越深入了，但我想把话题拉回到实践层面。${prevNotes ? `前面的${prevNotes}很到位，` : ''}任何方案如果在现实约束下不能落地，都是纸上谈兵。让我提出一个分阶段实施路径：第一步低成本验证，第二步小规模试点，第三步根据反馈迭代扩展。每一步都有明确的退出标准。`,
+            `我来做个务实的风险盘点。${prevNotes ? `承接${prevNotes}，` : ''}实施"${topic}"相关方案时，最大的三个风险是：利益相关方对齐、资源错配和时机窗口。我的建议是：先找到最小利益共识点，从这里开始构建信任和势能，而不是试图一步到位。`
         ]
     };
 
     const pool = templates[modelId] || templates.deepseek;
-    return pool[Math.floor(Math.random() * pool.length)];
+    // 按轮次确定性取模板，避免两轮重复且保证第二轮真正"接住"第一轮
+    return pool[(round - 1) % pool.length];
 }
 
 // ========== 初始化 ==========
@@ -558,7 +603,7 @@ function renderMessage(msg) {
                         <span class="text-[10px]" style="color:var(--muted);">${msg.round ? `第${msg.round}轮` : ''}</span>
                     </div>
                     <div class="px-4 py-2.5 rounded-2xl rounded-tl-md text-sm leading-relaxed" style="background:var(--card);border:1px solid var(--border);">
-                        <span class="msg-content">${escapeHtml(msg.content)}</span>
+                        <span class="msg-content">${renderMarkdown(msg.content)}</span>
                     </div>
                 </div>
             </div>`;
@@ -573,7 +618,10 @@ function updateTypingMessage(msgId, content, isDone) {
     if (!msgEl) return;
     const contentEl = msgEl.querySelector('.msg-content');
     if (contentEl) {
-        contentEl.innerHTML = escapeHtml(content) + (isDone ? '' : '<span class="typing-cursor"></span>');
+        // 打字中用 escapeHtml 保持性能与安全；完成时用 Markdown 渲染
+        contentEl.innerHTML = isDone
+            ? renderMarkdown(content)
+            : escapeHtml(content) + '<span class="typing-cursor"></span>';
     }
     scrollToBottom();
 }
@@ -720,7 +768,7 @@ async function generateResponse(model, round, simulate) {
     try {
         if (simulate) {
             // 模拟模式
-            const reply = generateSimReply(model.id, discussionState.topic, messages);
+            const reply = generateSimReply(model.id, discussionState.topic, messages, round);
             // 打字机效果
             for (let i = 0; i < reply.length; i++) {
                 if (!discussionState.active) return;
@@ -1135,6 +1183,18 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Markdown 渲染：marked 可用时解析，否则回退 escapeHtml
+function renderMarkdown(text) {
+    if (typeof marked !== 'undefined' && marked.parse) {
+        try {
+            return marked.parse(text || '');
+        } catch (e) {
+            return escapeHtml(text);
+        }
+    }
+    return escapeHtml(text);
 }
 
 function sleep(ms) {
