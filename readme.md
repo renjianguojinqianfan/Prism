@@ -154,7 +154,7 @@ uvicorn main:app --reload --port 8000
 | 变量 | 必填 | 说明 | 默认值 |
 |------|------|------|--------|
 | `PRISM_PORT` | 否 | 后端监听端口 | `8000` |
-| `PRISM_CORS_ORIGINS` | 否 | 预留 CORS 来源占位（代码当前使用 `*` 全放通，未读取此变量） | — |
+| `PRISM_CORS_ORIGINS` | 否 | 允许的 CORS 来源列表（逗号分隔） | `http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173` |
 
 > `.env` 文件已被 `.gitignore` 忽略，不会提交到仓库。
 <!-- /AUTO-GENERATED -->
