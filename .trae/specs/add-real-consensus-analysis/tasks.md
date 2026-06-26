@@ -86,6 +86,18 @@
   - [ ] SubTask 15.3：节点点击联动滚动生效
   - [ ] SubTask 15.4：同步更新 `readme.md` 功能列表与 `agents.md` 文件清单
 
+## 已知问题（P2 待办，当前不阻塞）
+
+- [ ] (P2) Task 16：升级 vite 消除 esbuild 开发服务器漏洞
+  - 背景：GitHub Dependabot 报告 4 个漏洞（1 high + 3 moderate），根因为 `esbuild <=0.24.2`（moderate，开发服务器可被任意网站发送请求并读取响应，[GHSA-67mh-4wv8-2f99](https://github.com/advisories/GHSA-67mh-4wv8-2f99)），传递导致 `vite <=6.4.2` 被标记为 high
+  - 影响范围：仅 `npm run dev` 开发服务器，`npm run build` 生产构建产物无风险
+  - 后端 Python 依赖（fastapi/uvicorn/pydantic）无漏洞
+  - SubTask 16.1：`npm install vite@latest`（当前 ^5.4.11 → 8.x，跨 3 个大版本 breaking change）
+  - SubTask 16.2：验证 `vite.config.ts` 兼容性（参考 vite 6/7/8 迁移指南），必要时调整配置
+  - SubTask 16.3：`npm run typecheck` + `npm run build` 通过
+  - SubTask 16.4：`npm run dev` 启动开发服务器冒烟测试（HMR、端口、代理）
+  - SubTask 16.5：重新运行 `npm audit --registry=https://registry.npmjs.org` 确认 0 漏洞
+
 # Task Dependencies
 - 阶段二 Task 6-11 依赖阶段一 Task 1-5（分析能力先行）
 - 阶段三 Task 13 依赖 Task 12（D3 与骨架先行）
