@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -23,3 +23,18 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Frontend (Vite / npm)
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Python venv
+.venv/
+venv/

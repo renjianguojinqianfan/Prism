@@ -150,8 +150,8 @@ def analyze(messages: list[Message], topic: str) -> list[Tag]:
             sim[i][j] = s
             sim[j][i] = s
 
-    high = 0.18
-    low = 0.06
+    high = 0.14
+    low = 0.11
 
     tags: list[Tag] = []
     for i in range(n):
