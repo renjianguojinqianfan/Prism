@@ -6,27 +6,70 @@ interface AnalyzeItem {
   content: string
 }
 
-const STOP = new Set([
+const _STOPWORDS = new Set<string>([
   '的', '是', '了', '和', '与', '并', '就', '也', '在', '对', '从', '把', '被',
-  '一个', '我们', '他们', '你们', '以及', '而且', '但是', '所以', '如果', '因此',
-  '这个', '那个', '可以', '需要', '一种', '一些',
-  'the', 'a', 'an', 'and', 'or', 'but', 'of', 'to', 'for', 'in', 'on', 'at',
-  'is', 'are', 'be', 'this', 'that', 'it', 'as', 'with', 'by'
+  '我', '你', '他', '她', '它', '我们', '你们', '他们', '这', '那', '这个', '那个',
+  '但', '而', '或', '如果', '因为', '所以', '一个', '一种', '可以', '需要', '进行',
+  'a', 'an', 'the', 'and', 'or', 'but', 'of', 'to', 'for', 'in', 'on', 'at',
+  'is', 'are', 'was', 'were', 'be', 'been', 'being', 'this', 'that', 'these',
+  'those', 'it', 'as', 'by', 'with', 'from', 'we', 'you', 'they', 'i', 'he', 'she'
 ])
+
+function _isCjk(ch: string): boolean {
+  if (!ch) return false
+  const cp = ch.charCodeAt(0)
+  return (
+    (0x4E00 <= cp && cp <= 0x9FFF) ||
+    (0x3400 <= cp && cp <= 0x4DBF) ||
+    (0xF900 <= cp && cp <= 0xFAFF)
+  )
+}
 
 function tokenize(text: string): Set<string> {
   const tokens = new Set<string>()
-  const cleaned = (text || '').toLowerCase()
-  ;(cleaned.match(/[a-z0-9]+/g) || []).forEach(t => {
-    if (t.length >= 2 && !STOP.has(t)) tokens.add(t)
-  })
-  const cjk = cleaned.replace(/[^\u4e00-\u9fff]/g, ' ')
-  cjk.split(/\s+/).filter(Boolean).forEach(seg => {
-    for (let i = 0; i + 2 <= seg.length; i++) {
-      const g = seg.slice(i, i + 2)
-      if (!STOP.has(g)) tokens.add(g)
+  if (!text) return tokens
+
+  const buf: string[] = []
+  const cjkChars: string[] = []
+
+  const flushAscii = () => {
+    if (buf.length > 0) {
+      const word = buf.join('').toLowerCase()
+      if (word.length >= 2 && !_STOPWORDS.has(word)) {
+        tokens.add(word)
+      }
+      buf.length = 0
     }
-  })
+  }
+
+  const flushCjk = () => {
+    if (cjkChars.length >= 2) {
+      for (let i = 0; i < cjkChars.length - 1; i++) {
+        const bigram = cjkChars[i] + cjkChars[i + 1]
+        if (!_STOPWORDS.has(bigram)) {
+          tokens.add(bigram)
+        }
+      }
+    }
+    cjkChars.length = 0
+  }
+
+  for (const ch of text) {
+    if (_isCjk(ch)) {
+      flushAscii()
+      cjkChars.push(ch)
+    } else if (/[a-zA-Z0-9]/.test(ch)) {
+      flushCjk()
+      buf.push(ch)
+    } else {
+      flushAscii()
+      flushCjk()
+    }
+  }
+
+  flushAscii()
+  flushCjk()
+
   return tokens
 }
 

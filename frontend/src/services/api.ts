@@ -60,7 +60,11 @@ export async function streamChat(
     throw new Error(`API返回 ${response.status}: ${errText.substring(0, 100)}`)
   }
 
-  const reader = response.body!.getReader()
+  if (!response.body) {
+    throw new Error('API响应无响应体')
+  }
+
+  const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
   let fullContent = ''

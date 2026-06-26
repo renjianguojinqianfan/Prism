@@ -53,4 +53,5 @@ export const PRESET_MODELS: ModelConfig[] = [
 
 export const PRESET_IDS = ['deepseek', 'kimi', 'glm', 'qwen']
 
-export const STORAGE_KEY = 'aiRoundtable_models'
+export const STORAGE_KEY = 'prism_models'
+export const LEGACY_STORAGE_KEY = 'aiRoundtable_models'
