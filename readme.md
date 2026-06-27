@@ -18,7 +18,7 @@
 - **讨论控制**：暂停/继续、跳过当前发言者、一键重置
 - **讨论记录导出**：一键导出 Markdown 格式讨论记录
 - **共识 / 分歧自动标注**：讨论结束后自动分析每条发言，在气泡右上角标注「共识 💡 / 分歧 ⚡ / 中立 ·」（后端优先，不可用时回退本地启发式）
-- **Markdown 渲染**：AI 回复支持 Markdown 语法（加粗、列表、代码块、引用等）
+- **Markdown 渲染 + XSS 防护**：AI 回复支持 Markdown 语法（加粗、列表、代码块、引用等），通过 marked `walkTokens` 转义 HTML token 防止 XSS 攻击
 - **自定义模型**：支持添加任意兼容 OpenAI `/v1/chat/completions` 协议的模型端点
 
 ## 🛠️ 技术栈
@@ -78,6 +78,26 @@
         ├── tasks.md
         └── checklist.md
 ```
+
+## 🎬 快速演示
+
+面向客户快速展示，两种方式任选其一：
+
+1. **单文件原型**：直接双击根目录 `index.html` 即可在浏览器打开，模拟模式即开即用，无需安装任何依赖。为避免 `file://` 协议限制，推荐用本地静态服务器打开：
+
+   ```bash
+   python -m http.server 8080
+   # 浏览器访问 http://localhost:8080/index.html
+   ```
+
+2. **React 完整版**：进入 `frontend/` 执行 `npm install && npm run dev`，功能完整（含设置面板、自定义模型、导出等），访问 [http://localhost:5173](http://localhost:5173)。
+
+两种方式默认均开启**模拟模式**，无需 API Key 即可看到多 AI 圆桌讨论效果。
+
+> 注意事项：
+> - `index.html` 依赖联网 CDN（Tailwind / Google Fonts / Font Awesome / marked），首次打开需联网
+> - 需现代浏览器（推荐 Chrome 或 Edge 最新版）
+> - 切换到**真实 LLM 模式**：在设置面板填写各模型 API Key 并保持联网，关闭「模拟模式」开关即可
 
 ## 🚀 快速开始
 
