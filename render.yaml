@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: prism-backend
+    runtime: python
+    repo: https://github.com/renjianguojinqianfan/Prism
+    branch: main
+    plan: free
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PRISM_CORS_ORIGINS
+        value: https://prism-eight-eta.vercel.app,https://prism-renjianguojinqianfan218.vercel.app,https://prism-git-main-renjianguojinqianfan218.vercel.app
