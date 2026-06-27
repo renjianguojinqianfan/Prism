@@ -456,8 +456,16 @@ function generateSimReply(modelId, topic, history, round) {
 
 // ========== 初始化 ==========
 function init() {
-    // 从localStorage加载配置
-    const saved = localStorage.getItem('aiRoundtable_models');
+    // 从localStorage加载配置（支持从旧键 aiRoundtable_models 迁移）
+    let saved = localStorage.getItem('prism_models');
+    if (!saved) {
+        const legacy = localStorage.getItem('aiRoundtable_models');
+        if (legacy) {
+            saved = legacy;
+            localStorage.setItem('prism_models', legacy);
+            localStorage.removeItem('aiRoundtable_models');
+        }
+    }
     if (saved) {
         try {
             models = JSON.parse(saved);
@@ -804,6 +812,9 @@ async function generateResponse(model, round, simulate) {
                 throw new Error(`API返回 ${response.status}: ${errText.substring(0, 100)}`);
             }
 
+            if (!response.body) {
+                throw new Error('API响应无响应体');
+            }
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
@@ -972,7 +983,7 @@ function localHeuristicAnalyze(items) {
     if (items.length === 1) {
         return [{ id: items[0].id, label: 'neutral', score: 0, evidence: '仅一条发言，默认为中立' }];
     }
-    const STOP = new Set(['的','是','了','和','与','并','就','也','在','对','从','把','被','一个','我们','他们','你们','以及','而且','但是','所以','如果','因此','这个','那个','可以','需要','一种','一些','the','a','an','and','or','but','of','to','for','in','on','at','is','are','be','this','that','it','as','with','by']);
+    const STOP = new Set(['的','是','了','和','与','并','就','也','在','对','从','把','被','我','你','他','她','它','我们','你们','他们','这','那','这个','那个','但','而','或','如果','因为','所以','一个','一种','可以','需要','进行','a','an','the','and','or','but','of','to','for','in','on','at','is','are','was','were','be','been','being','this','that','these','those','it','as','by','with','from','we','you','they','i','he','she']);
     const tokenize = (text) => {
         const tokens = new Set();
         const cleaned = (text || '').toLowerCase();
@@ -1134,7 +1145,7 @@ function saveSettings() {
 }
 
 function saveModels() {
-    localStorage.setItem('aiRoundtable_models', JSON.stringify(models));
+    localStorage.setItem('prism_models', JSON.stringify(models));
 }
 
 function updateModelStatus() {
@@ -1186,8 +1197,20 @@ function escapeHtml(text) {
 }
 
 // Markdown 渲染：marked 可用时解析，否则回退 escapeHtml
+// 与 React 版一致：通过 walkTokens 转义 HTML token，防止 XSS
+let _markedXssInit = false;
 function renderMarkdown(text) {
     if (typeof marked !== 'undefined' && marked.parse) {
+        if (!_markedXssInit) {
+            marked.use({
+                walkTokens(token) {
+                    if (token.type === 'html') {
+                        token.text = escapeHtml(token.text);
+                    }
+                }
+            });
+            _markedXssInit = true;
+        }
         try {
             return marked.parse(text || '');
         } catch (e) {
