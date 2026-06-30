@@ -332,6 +332,29 @@
                     </button>
                 </div>
                 <p class="text-xs mb-6" style="color:var(--muted);">配置各模型的API端点和密钥。关闭「模拟模式」后，已配置Key的模型将调用真实API。支持所有兼容OpenAI格式的API端点。</p>
+                <div class="mb-4 p-3 rounded-xl" style="background:var(--accent-dim);border:1px solid var(--border);">
+                    <p class="text-[11px] leading-relaxed mb-3" style="color:var(--accent);">
+                        <i class="fas fa-circle-info mr-1"></i>建议使用不同厂商的模型（如 DeepSeek、Kimi、通义），观点碰撞更充分。
+                    </p>
+                    <div class="text-[10px] uppercase tracking-widest mb-2" style="color:var(--muted);">快速添加模板</div>
+                    <div class="flex flex-wrap gap-2" id="quickTemplateButtons">
+                        <button onclick="addModelFromTemplate('deepseek')" class="px-2.5 py-1.5 rounded-lg text-[11px] font-500 border border-[var(--border)] hover:border-[#10B981] hover:text-[#10B981] transition-all" style="color:var(--muted);">
+                            <i class="fas fa-brain mr-1" style="color:#10B981;"></i>DeepSeek
+                        </button>
+                        <button onclick="addModelFromTemplate('kimi')" class="px-2.5 py-1.5 rounded-lg text-[11px] font-500 border border-[var(--border)] hover:border-[#F43F5E] hover:text-[#F43F5E] transition-all" style="color:var(--muted);">
+                            <i class="fas fa-moon mr-1" style="color:#F43F5E;"></i>Kimi
+                        </button>
+                        <button onclick="addModelFromTemplate('glm')" class="px-2.5 py-1.5 rounded-lg text-[11px] font-500 border border-[var(--border)] hover:border-[#06B6D4] hover:text-[#06B6D4] transition-all" style="color:var(--muted);">
+                            <i class="fas fa-gem mr-1" style="color:#06B6D4;"></i>GLM
+                        </button>
+                        <button onclick="addModelFromTemplate('qwen')" class="px-2.5 py-1.5 rounded-lg text-[11px] font-500 border border-[var(--border)] hover:border-[#F97316] hover:text-[#F97316] transition-all" style="color:var(--muted);">
+                            <i class="fas fa-fire mr-1" style="color:#F97316;"></i>通义
+                        </button>
+                        <button onclick="addModelFromTemplate('mimo')" class="px-2.5 py-1.5 rounded-lg text-[11px] font-500 border border-[var(--border)] hover:border-[#8B5CF6] hover:text-[#8B5CF6] transition-all" style="color:var(--muted);">
+                            <i class="fas fa-bolt mr-1" style="color:#8B5CF6;"></i>Mimo
+                        </button>
+                    </div>
+                </div>
                 <div id="modelConfigs" class="space-y-4"></div>
                 <button onclick="addCustomModel()" class="mt-4 w-full py-2.5 rounded-xl text-sm font-500 border border-dashed border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all" style="color:var(--muted);">
                     <i class="fas fa-plus mr-1"></i>添加自定义模型
@@ -411,6 +434,18 @@ const PRESET_MODELS = [
         systemPrompt: '你是通义千问，一位务实的问题解决者。你擅长将理论转化为实践、评估方案可行性、提供具体的执行建议。在讨论中，你总是关注落地和实用性，善于将讨论引向可操作的结论。回答控制在200字以内。',
         enabled: true,
         custom: false
+    },
+    {
+        id: 'mimo',
+        name: 'Mimo',
+        icon: 'fa-bolt',
+        color: '#8B5CF6',
+        endpoint: 'https://api.mimo.com/v1/chat/completions',
+        model: 'mimo-v2.5',
+        apiKey: '',
+        systemPrompt: '你是Mimo，一位思维敏捷的辩论者。你擅长快速抓住问题核心、提出尖锐的反问、在辩论中寻找漏洞。在讨论中，你总是直接表达不同观点，推动讨论深入。回答控制在200字以内。',
+        enabled: true,
+        custom: false
     }
 ];
 
@@ -446,6 +481,11 @@ function generateSimReply(modelId, topic, history, round) {
             `从落地实施的角度看"${topic}"，最关键的是：如何把抽象理念转化为可执行的方案。${prevNotes ? `结合${prevNotes}，` : ''}我建议聚焦三个维度：可行性、成本效益和风险控制。与其追求完美方案，不如先设计一个MVP——最小可行方案，快速验证核心假设。`,
             `讨论越来越深入了，但我想把话题拉回到实践层面。${prevNotes ? `前面的${prevNotes}很到位，` : ''}任何方案如果在现实约束下不能落地，都是纸上谈兵。让我提出一个分阶段实施路径：第一步低成本验证，第二步小规模试点，第三步根据反馈迭代扩展。每一步都有明确的退出标准。`,
             `我来做个务实的风险盘点。${prevNotes ? `承接${prevNotes}，` : ''}实施"${topic}"相关方案时，最大的三个风险是：利益相关方对齐、资源错配和时机窗口。我的建议是：先找到最小利益共识点，从这里开始构建信任和势能，而不是试图一步到位。`
+        ],
+        mimo: [
+            `等等，我来质疑一下前提！${prevNotes ? `${prevNotes}听起来有道理，但` : ''}"${topic}"这个问题本身是不是被框架错了？很多讨论陷入僵局，不是因为答案不对，而是因为问题问错了。让我换个问法——我们真正要解决的是什么问题？`,
+            `我不同意这个方向！${prevNotes ? `${prevNotes}这个思路有个致命的漏洞——` : ''}"${topic}"的讨论一直在绕圈子，因为我们回避了那个最不舒服的问题：谁来承担成本？谁获得收益？不谈分配，只谈"对大家都好"，都是自欺欺人。`,
+            `让我来捅破窗户纸！${prevNotes ? `顺着${prevNotes}的逻辑推到极致，` : ''}关于"${topic}"，所有人都在绕开一个核心矛盾——这个矛盾不解决，任何方案都是表面功夫。我说得直接一点：我们是在解决问题，还是在制造问题？`
         ]
     };
 
@@ -491,11 +531,7 @@ function init() {
 function renderModelCheckboxes() {
     const container = document.getElementById('modelCheckboxes');
     if (!container) return;
-    // 仅渲染预设的 4 个模型
-    const presetIds = ['deepseek', 'kimi', 'glm', 'qwen'];
-    const list = presetIds
-        .map(id => models.find(m => m.id === id))
-        .filter(Boolean);
+    const list = models.filter(m => m.enabled);
     container.innerHTML = list.map(m => `
         <label class="flex items-center gap-1.5 cursor-pointer">
             <input type="checkbox" data-model-id="${m.id}" ${m.enabled ? 'checked' : ''}
@@ -867,6 +903,7 @@ async function generateResponse(model, round, simulate) {
         round: round
     };
     messages.push(msgRecord);
+    analyzeSingleMessage(msgId, model, fullContent, round);
 }
 
 function buildAPIHistory(model, currentRound) {
@@ -940,7 +977,125 @@ function resetDiscussion() {
 }
 
 // ========== 共识/分歧分析 ==========
-const ANALYZE_ENDPOINT = 'http://localhost:8000/api/analyze';
+const ANALYZE_ENDPOINT = 'http://localhost:8000/api/analyze/stream';
+const ANALYZE_FALLBACK_ENDPOINT = 'http://localhost:8000/api/analyze';
+
+async function streamAnalysis(endpoint, payload, onDelta) {
+    try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 30000);
+        const resp = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: ctrl.signal,
+        });
+        clearTimeout(timer);
+        if (!resp.ok || !resp.body) return null;
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let final = null;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed.startsWith('data: ')) continue;
+                const data = trimmed.slice(6);
+                let evt;
+                try {
+                    evt = JSON.parse(data);
+                } catch {
+                    continue;
+                }
+                if (evt.type === 'delta' && evt.content && onDelta) {
+                    onDelta(evt.content);
+                } else if (evt.type === 'final' && evt.label) {
+                    final = { label: evt.label, evidence: evt.evidence || '' };
+                } else if (evt.type === 'fallback') {
+                    return null;
+                }
+            }
+        }
+        return final;
+    } catch {
+        return null;
+    }
+}
+
+async function analyzeSingleMessage(msgId, model, content, round) {
+    const aiMsgs = messages.filter(m => m.role === 'assistant');
+    const priorMsgs = aiMsgs.filter(m => m.id !== msgId);
+    const simulate = document.getElementById('simulateMode')?.checked;
+
+    if (priorMsgs.length === 0) return;
+
+    if (!simulate) {
+        const payload = {
+            topic: discussionState.topic || '',
+            currentMessage: {
+                id: msgId,
+                modelName: model.name,
+                model: model.model,
+                content: content,
+            },
+            priorMessages: priorMsgs.slice(-5).map(m => ({
+                id: m.id,
+                modelName: m.modelName,
+                model: models.find(mo => mo.id === m.modelId)?.model || '',
+                content: m.content,
+            })),
+        };
+        const finalTag = await streamAnalysis(ANALYZE_ENDPOINT, payload);
+        if (finalTag) {
+            applySingleTag(msgId, finalTag.label, finalTag.evidence, model.name);
+            return;
+        }
+    }
+
+    const allItems = priorMsgs.concat([{ id: msgId, modelName: model.name, content }]);
+    let tags = null;
+    if (!simulate) {
+        try {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 4000);
+            const resp = await fetch(ANALYZE_FALLBACK_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ topic: discussionState.topic || '', messages: allItems }),
+                signal: ctrl.signal
+            });
+            clearTimeout(timer);
+            if (resp.ok) {
+                const data = await resp.json();
+                if (Array.isArray(data?.tags)) tags = data.tags;
+            }
+        } catch (e) { /* 网络错误，回退本地 */ }
+    }
+    if (!tags) {
+        tags = localHeuristicAnalyze(allItems);
+    }
+    const myTag = tags.find(t => t.id === msgId);
+    if (myTag) {
+        applySingleTag(msgId, myTag.label, myTag.evidence, '本地启发式');
+    }
+}
+
+function applySingleTag(msgId, label, evidence, analyzer) {
+    const slot = document.querySelector(`[data-msg-id="${msgId}"] .msg-tag-slot`);
+    if (!slot) return;
+    const cls = ['consensus', 'divergence', 'neutral'].includes(label) ? label : 'neutral';
+    const TEXT = { consensus: '共识 💡', divergence: '分歧 ⚡', neutral: '中立 ·' };
+    const text = TEXT[cls];
+    const analyzerText = analyzer ? `<span class="text-[9px] ml-1 opacity-60">· ${analyzer}自评</span>` : '';
+    slot.innerHTML = `<span class="msg-tag ${cls}" data-tag-type="${cls}" title="${(evidence || '').replace(/"/g, '&quot;')}">${text}${analyzerText}</span>`;
+}
 
 async function analyzeMessages() {
     const aiMsgs = messages.filter(m => m.role === 'assistant');
@@ -1007,7 +1162,7 @@ function localHeuristicAnalyze(items) {
         const union = a.size + b.size - inter;
         return union === 0 ? 0 : inter / union;
     };
-    const HIGH = 0.18, LOW = 0.06;
+    const HIGH = 0.14, LOW = 0.11;
     return items.map((it, i) => {
         const sims = [];
         for (let j = 0; j < items.length; j++) if (i !== j) sims.push(jaccard(sets[i], sets[j]));
@@ -1112,6 +1267,23 @@ function renderModelConfigs() {
             </div>
         </div>
     `).join('');
+}
+
+function addModelFromTemplate(templateId) {
+    const preset = PRESET_MODELS.find(p => p.id === templateId);
+    if (!preset) return;
+    const existing = models.find(m => m.id === templateId && !m.custom);
+    if (existing) {
+        existing.enabled = true;
+        showToast(`${preset.name} 已启用`, 'info');
+    } else {
+        models.push({ ...preset, enabled: true });
+        showToast(`已添加 ${preset.name}`, 'success');
+    }
+    renderModelConfigs();
+    renderRoleBar();
+    renderModelCheckboxes();
+    updateModelStatus();
 }
 
 function addCustomModel() {
