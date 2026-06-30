@@ -1,7 +1,8 @@
 import { useDiscussion } from '../store/DiscussionContext'
+import { QUICK_TEMPLATES } from '../config/presetModels'
 
 export function SettingsPanel() {
-  const { state, closeSettings, updateModel, addCustomModel, removeModel, saveSettings } =
+  const { state, closeSettings, updateModel, addCustomModel, addModelFromTemplate, removeModel, saveSettings } =
     useDiscussion()
 
   if (!state.settingsOpen) return null
@@ -30,6 +31,15 @@ export function SettingsPanel() {
           <p className="text-xs mb-6" style={{ color: 'var(--muted)' }}>
             配置各模型的API端点和密钥。关闭「模拟模式」后，已配置Key的模型将调用真实API。支持所有兼容OpenAI格式的API端点。
           </p>
+
+          <div
+            className="mb-6 p-3 rounded-xl"
+            style={{ background: 'var(--accent-dim)', border: '1px solid var(--border)' }}
+          >
+            <p className="text-[11px] leading-relaxed" style={{ color: 'var(--accent)' }}>
+              <i className="fas fa-circle-info mr-1"></i>建议使用不同厂商的模型（如 DeepSeek、Kimi、通义），观点碰撞更充分。
+            </p>
+          </div>
 
           <div className="space-y-4">
             {state.models.map((m, idx) => (
@@ -153,9 +163,28 @@ export function SettingsPanel() {
             ))}
           </div>
 
+          <div className="mt-4 mb-2">
+            <p className="text-[10px] mb-2 uppercase tracking-widest" style={{ color: 'var(--muted)' }}>
+              快速添加模板
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {QUICK_TEMPLATES.map(tpl => (
+                <button
+                  key={tpl.name}
+                  onClick={() => addModelFromTemplate(tpl)}
+                  className="px-3 py-1.5 rounded-lg text-xs border border-dashed border-[var(--border)] hover:border-[var(--accent)] transition-all"
+                  style={{ color: tpl.color }}
+                  title={`一键填入 ${tpl.name} 的端点/模型名/角色设定，仍需手动填写 API Key`}
+                >
+                  <i className={`fas ${tpl.icon} mr-1`}></i>+ {tpl.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <button
             onClick={addCustomModel}
-            className="mt-4 w-full py-2.5 rounded-xl text-sm font-500 border border-dashed border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all"
+            className="mt-2 w-full py-2.5 rounded-xl text-sm font-500 border border-dashed border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all"
             style={{ color: 'var(--muted)' }}
           >
             <i className="fas fa-plus mr-1"></i>添加自定义模型

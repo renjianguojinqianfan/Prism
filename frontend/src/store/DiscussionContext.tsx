@@ -8,15 +8,19 @@ import {
   useRef,
   type ReactNode
 } from 'react'
-import type { AnalysisTag, Message, ModelConfig, ToastItem, ToastType } from './types'
-import { PRESET_MODELS, STORAGE_KEY, LEGACY_STORAGE_KEY } from '../config/presetModels'
+import type { Message, ModelConfig, ToastItem, ToastType } from './types'
+import { STORAGE_KEY, LEGACY_STORAGE_KEY, type QuickTemplate } from '../config/presetModels'
 import { buildAPIHistory, streamChat } from '../services/api'
 import { generateSimReply } from '../services/simulator'
-import { fetchAnalysis, localHeuristicAnalyze } from '../services/analyzer'
+import { fetchAnalysis, localHeuristicAnalyze, streamAnalysis, type StreamAnalysisPayload } from '../services/analyzer'
 import { sleep, genId } from '../utils/sleep'
 
+// 流式自评端点（主路径）：发言者自己 LLM 做评估，SSE 流式推回
 const ANALYZE_ENDPOINT =
-  import.meta.env.VITE_ANALYZE_ENDPOINT || 'http://localhost:8000/api/analyze'
+  import.meta.env.VITE_ANALYZE_ENDPOINT || 'http://localhost:8000/api/analyze/stream'
+// Jaccard 同步回退端点：流式失败 / 无 Key / 模拟模式时使用
+const ANALYZE_FALLBACK_ENDPOINT =
+  import.meta.env.VITE_ANALYZE_FALLBACK_ENDPOINT || 'http://localhost:8000/api/analyze'
 
 interface State {
   models: ModelConfig[]
@@ -64,23 +68,18 @@ function loadModels(): ModelConfig[] {
   }
   if (saved) {
     try {
-      const parsed = JSON.parse(saved) as ModelConfig[]
-      PRESET_MODELS.forEach(preset => {
-        if (!parsed.find(m => m.id === preset.id && !m.custom)) {
-          parsed.push({ ...preset })
-        }
-      })
-      return parsed
+      return JSON.parse(saved) as ModelConfig[]
     } catch {
-      return PRESET_MODELS.map(m => ({ ...m }))
+      return []
     }
   }
-  return PRESET_MODELS.map(m => ({ ...m }))
+  return []
 }
 
 function initState(): State {
+  const models = loadModels()
   return {
-    models: loadModels(),
+    models,
     messages: [],
     simulate: true,
     maxRounds: 2,
@@ -88,7 +87,8 @@ function initState(): State {
     discussionPaused: false,
     currentRound: 0,
     speakingModelId: null,
-    settingsOpen: false,
+    // 模型列表为空时自动展开配置面板，引导用户添加模型
+    settingsOpen: models.length === 0,
     inputText: '',
     toasts: []
   }
@@ -154,6 +154,7 @@ interface DiscussionContextValue {
   toggleModelEnabled: (id: string) => void
   updateModel: (idx: number, patch: Partial<ModelConfig>) => void
   addCustomModel: () => void
+  addModelFromTemplate: (template: QuickTemplate) => void
   removeModel: (idx: number) => void
   saveSettings: () => void
   openSettings: () => void
@@ -244,6 +245,19 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
         systemPrompt: '你是一位独特的AI讨论者，拥有自己的视角和风格。在讨论中，你总是提供有价值的观点。',
         enabled: true,
         custom: true
+      }
+    })
+  }, [])
+
+  const addModelFromTemplate = useCallback((template: QuickTemplate) => {
+    dispatch({
+      type: 'ADD_MODEL',
+      model: {
+        id: 'custom_' + Date.now(),
+        apiKey: '',
+        enabled: true,
+        custom: true,
+        ...template,
       }
     })
   }, [])
@@ -353,25 +367,71 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
       updateMessage(msgId, { content: fullContent, thinking: false })
     }
 
-    const analyzeMessages = async (simulate: boolean) => {
-      const aiMsgs = messagesRef.current.filter(m => m.role === 'assistant')
-      if (aiMsgs.length === 0) return
-      const payload = {
-        topic: topicRef.current || '',
-        messages: aiMsgs.map(m => ({ id: m.id, modelName: m.modelName, content: m.content }))
+    const streamAnalyzeMessage = async (
+      currentMsg: Message,
+      priorAiMsgs: Message[],
+      isBaseline: boolean,
+      simulate: boolean
+    ) => {
+      // 第一条 AI 发言作为基准，不带标签
+      if (isBaseline) return
+
+      const model = state.models.find(m => m.id === currentMsg.modelId)
+      if (!model) return
+
+      // 模拟模式：跳过 LLM 调用，直接走 Jaccard（与现状一致）
+      if (!simulate && model.apiKey) {
+        const payload: StreamAnalysisPayload = {
+          topic: topicRef.current || '',
+          currentMessage: {
+            id: currentMsg.id,
+            modelName: currentMsg.modelName,
+            model: model.model,
+            content: currentMsg.content,
+          },
+          priorMessages: priorAiMsgs.map(m => ({
+            id: m.id,
+            modelName: m.modelName,
+            model: '',
+            content: m.content,
+          })),
+        }
+        const finalTag = await streamAnalysis(ANALYZE_ENDPOINT, payload)
+        if (finalTag) {
+          updateMessage(currentMsg.id, {
+            tag: { label: finalTag.label, evidence: finalTag.evidence, analyzer: currentMsg.modelName }
+          })
+          return
+        }
+        // 流式失败，继续走 Jaccard 回退
       }
 
-      let tags: AnalysisTag[] | null = null
-      if (!simulate) {
-        tags = await fetchAnalysis(ANALYZE_ENDPOINT, payload)
+      // Jaccard 回退：后端 /api/analyze 同步调用
+      const fallbackPayload = {
+        topic: topicRef.current || '',
+        messages: [
+          ...priorAiMsgs.map(m => ({ id: m.id, modelName: m.modelName, content: m.content })),
+          { id: currentMsg.id, modelName: currentMsg.modelName, content: currentMsg.content },
+        ],
       }
-      if (!tags) {
-        tags = localHeuristicAnalyze(payload.messages)
+      const fallbackTags = await fetchAnalysis(ANALYZE_FALLBACK_ENDPOINT, fallbackPayload)
+      if (fallbackTags && fallbackTags.length > 0) {
+        const myTag = fallbackTags[fallbackTags.length - 1]
+        updateMessage(currentMsg.id, {
+          tag: { label: myTag.label, evidence: myTag.evidence, analyzer: '本地启发式' }
+        })
+        return
+      }
+
+      // 最后回退：前端 localHeuristicAnalyze
+      const localTags = localHeuristicAnalyze(fallbackPayload.messages)
+      if (localTags.length > 0) {
+        const myTag = localTags[localTags.length - 1]
+        updateMessage(currentMsg.id, {
+          tag: { label: myTag.label, evidence: myTag.evidence, analyzer: '本地启发式' }
+        })
         showToast('已使用本地分析（后端不可用或模拟模式）', 'info')
       }
-      tags.forEach(t => {
-        updateMessage(t.id, { tag: { label: t.label, evidence: t.evidence } })
-      })
     }
 
     const runDiscussion = async (simulate: boolean) => {
@@ -401,6 +461,16 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
           dispatch({ type: 'SET_SPEAKING', id: model.id })
           await generateResponse(model, round, simulate)
           dispatch({ type: 'SET_SPEAKING', id: null })
+
+          // 实时增量分析：发言结束后立即分析这条（不等到全部讨论结束）
+          const aiMsgs = messagesRef.current.filter(m => m.role === 'assistant' && !m.thinking)
+          if (aiMsgs.length > 0) {
+            const current = aiMsgs[aiMsgs.length - 1]
+            const prior = aiMsgs.slice(0, -1)
+            const isBaseline = aiMsgs.length === 1
+            await streamAnalyzeMessage(current, prior, isBaseline, simulate)
+          }
+
           await sleep(600)
         }
       }
@@ -412,7 +482,6 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
         modelId: null,
         modelName: ''
       })
-      await analyzeMessages(simulate)
       endDiscussion()
     }
 
@@ -504,6 +573,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
       toggleModelEnabled,
       updateModel,
       addCustomModel,
+      addModelFromTemplate,
       removeModel,
       saveSettings,
       openSettings,
@@ -524,6 +594,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
     toggleModelEnabled,
     updateModel,
     addCustomModel,
+    addModelFromTemplate,
     removeModel,
     openSettings,
     closeSettings,

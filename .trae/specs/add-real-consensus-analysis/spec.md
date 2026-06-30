@@ -1,7 +1,7 @@
 # 棱镜 (Prism) 能力规格 Spec
 
 > change-id: `add-real-consensus-analysis`
-> 最后更新：2026-06-26（重新扫描项目，纳入 React 迁移、SSE 流式、Markdown 渲染、安全加固等已落地能力，并规划 P1 观点图谱）
+> 最后更新：2026-06-30（重构共识/分歧分析为「发言者自评 + SSE 流式 + 三级回退」架构，移除预设模型改为快速添加模板）
 
 ## Why
 
@@ -17,7 +17,8 @@
 ### 已落地（Implemented）
 - **前端架构迁移**：从单 `index.html` 迁移到 React 18 + TypeScript（strict）+ Vite + Tailwind CSS；状态管理用 Context + useReducer + useRef，无第三方状态库
 - **SSE 流式调用**：`streamChat()` 直连各家 OpenAI 兼容 `/v1/chat/completions`（`stream: true`），逐 token 渲染并支持 AbortController 中断
-- **真实 LLM 分析 + 本地回退**：讨论结束后调用后端 `POST /api/analyze`；失败/超时/模拟模式自动回退到前端 `localHeuristicAnalyze`，前后端停用词与分词逻辑已统一
+- **发言者自评 + SSE 流式 + 三级回退**：每条 AI 发言结束后，由该发言者自己的 LLM 对自己发言做共识/分歧/中立评估，后端 `POST /api/analyze/stream` 以 SSE 推回 `delta`/`final`/`fallback` 事件；分析 endpoint 与 Key 通过后端环境变量 `PRISM_ANALYZER_API_KEYS`（JSON 字符串，结构 `{"model":{"endpoint":url,"key":apiKey}}`，按 model 名匹配）统一管理，前端只传 model 名，不传 endpoint 也不传 Key（C1 修复，避免 SSRF 与 Key 泄漏）。第一条 AI 发言作为基准不带标签，从第二条开始评估。三级回退：发言者自评失败 → 后端 Jaccard `/api/analyze`（同步）→ 前端 `localHeuristicAnalyze`
+- **预设模型改为快速添加模板**：移除 4 个预设模型，改为用户自填 + 5 个快速添加模板（DeepSeek/Kimi/GLM/通义千问/Mimo），模板只预填端点/模型名/角色设定，API Key 仍由用户手填；首次进入自动展开配置面板
 - **模拟模式多轮连贯**：`generateSimReply()` 引用上一条 AI 发言片段，按 `(round-1) % pool.length` 确定性取模板，保证同话题可复现
 - **Markdown 渲染 + XSS 防护**：marked v12 + `walkTokens` 转义 HTML token，思考态走纯文本转义 + 打字光标
 - **模型复选框选择器**：默认全选，可自由勾选参与讨论的模型
@@ -54,16 +55,28 @@
 - **WHEN** 用户点击"跳过"触发 `abortController.abort()`
 - **THEN** 流式读取中断，`AbortError` 被静默吞掉，不弹错误 toast
 
-### Requirement: 真实 LLM 分析与本地回退
-系统 SHALL 在讨论结束后优先调用后端 `/api/analyze`，失败时回退到前端 `localHeuristicAnalyze`，两者算法（停用词表、2-gram 分词、Jaccard 相似度、阈值 0.14/0.11）MUST 保持一致。
+### Requirement: 发言者自评流式分析与三级回退
+系统 SHALL 在每条 AI 发言结束后，由该发言者自己的 LLM 对自己发言做共识/分歧/中立评估，通过后端 `POST /api/analyze/stream`（SSE 流式）推回结果。分析 endpoint 与 Key 由后端环境变量 `PRISM_ANALYZER_API_KEYS`（JSON 字符串，结构 `{"model":{"endpoint":url,"key":apiKey}}`，按 model 名匹配）统一管理，前端只传 model 名，不传 endpoint 也不传 Key（C1 修复，避免 SSRF 与 Key 泄漏）。第一条 AI 发言作为基准不带标签，从第二条开始评估。失败时按「后端 Jaccard `/api/analyze`（同步）→ 前端 `localHeuristicAnalyze`」三级回退。
 
-#### Scenario: 后端可用
-- **WHEN** 真实模式且 `POST /api/analyze` 返回 200
-- **THEN** 用后端返回的 `tags` 写入每条消息的 `msg.tag`
+#### Scenario: 第一条发言作为基准
+- **WHEN** 讨论进行中且当前消息是第一条 AI 发言
+- **THEN** 跳过分析，消息不携带 `tag`，后续发言以此为基准进行对比
 
-#### Scenario: 后端不可达
-- **WHEN** fetch 失败 / 4s 超时 / HTTP 非 2xx / 模拟模式
-- **THEN** 回退到 `localHeuristicAnalyze`，toast 提示"已使用本地分析（后端不可用或模拟模式）"
+#### Scenario: 发言者自评成功
+- **WHEN** 第二条及以后发言结束，且后端能在 `PRISM_ANALYZER_API_KEYS` 中按该发言者 model 名查到 `{"endpoint":url,"key":apiKey}` 配置
+- **THEN** 后端以后端配置的 endpoint + Key 调用其 LLM（endpoint 不来自前端，杜绝 SSRF），SSE 推送 `delta`（流式证据片段）与 `final`（`{label, evidence, analyzer}` JSON）事件，前端写入 `msg.tag`，标签内附加「· {analyzer}自评」子文案
+
+#### Scenario: 自评失败回退到后端 Jaccard
+- **WHEN** 无对应 model 配置 / 上游 LLM 调用失败 / 解析失败
+- **THEN** 后端推送 `fallback` 事件，前端转调同步 `POST /api/analyze`（Jaccard 2-gram + 阈值 0.14/0.11）写入 `msg.tag`（不含 `analyzer` 字段）
+
+#### Scenario: 后端 Jaccard 仍不可达
+- **WHEN** 同步回退 fetch 失败 / 超时 / HTTP 非 2xx / 模拟模式
+- **THEN** 进一步回退到前端 `localHeuristicAnalyze`，算法（停用词表、2-gram 分词、Jaccard 相似度、阈值 0.14/0.11）与后端 Jaccard 保持一致
+
+#### Scenario: 前文上下文裁剪
+- **WHEN** `priorMessages` 超过 5 条
+- **THEN** 后端仅取最近 5 条作为对比上下文构建 prompt，避免 token 超限
 
 ### Requirement: 模拟模式多轮连贯
 系统 SHALL 在模拟模式下让后发言模型引用前一条 AI 发言的前 60 字，保证多轮对话连贯。
@@ -149,7 +162,7 @@
 原单 `index.html` 文件改为 React + TypeScript + Vite 工程化项目（`frontend/`），组件按 `components/`、纯逻辑按 `services/`/`utils/`、类型集中在 `store/types.ts`，状态统一在 `DiscussionContext.tsx` 用 useReducer + useRef 管理。
 
 ### Requirement: 共识/分歧标签来源
-原 Mock 策略（第一条共识/最后一条分歧）已被替换为：真实模式走后端 `/api/analyze`，模拟/失败回退走前端 `localHeuristicAnalyze`（Jaccard 2-gram + 阈值 0.14/0.11）。
+原 Mock 策略（第一条共识/最后一条分歧）已被替换为「发言者自评」架构：第一条 AI 发言作为基准不带标签，从第二条起由发言者自己的 LLM 对自己发言做评估，经后端 `POST /api/analyze/stream`（SSE）推回；自评失败时三级回退到后端 Jaccard `/api/analyze`（同步）→ 前端 `localHeuristicAnalyze`（Jaccard 2-gram + 阈值 0.14/0.11）。标签内附加「· {analyzer}自评」子文案以区分自评成功与回退路径。
 
 ## REMOVED Requirements
 

@@ -143,3 +143,81 @@ export async function fetchAnalysis(
     return null
   }
 }
+
+// ---------- 流式自评分析 ----------
+
+export interface StreamAnalyzerMessage {
+  id: string
+  modelName: string
+  model: string
+  content: string
+}
+
+export interface StreamAnalysisPayload {
+  topic: string
+  currentMessage: StreamAnalyzerMessage
+  priorMessages: StreamAnalyzerMessage[]
+}
+
+export interface StreamAnalysisResult {
+  label: AnalysisTag['label']
+  evidence: string
+}
+
+/**
+ * 调用后端 /api/analyze/stream SSE 端点，流式接收发言者自评结果。
+ * 返回 null 表示后端推了 fallback event（无 Key / HTTP 错误 / 解析失败 / 网络错误），调用方应回退 Jaccard。
+ */
+export async function streamAnalysis(
+  endpoint: string,
+  payload: StreamAnalysisPayload,
+  onDelta?: (delta: string) => void,
+  timeoutMs = 30000
+): Promise<StreamAnalysisResult | null> {
+  try {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal,
+    })
+    clearTimeout(timer)
+    if (!resp.ok || !resp.body) return null
+
+    const reader = resp.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let final: StreamAnalysisResult | null = null
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed.startsWith('data: ')) continue
+        const data = trimmed.slice(6)
+        let evt: { type: string; content?: string; label?: string; evidence?: string }
+        try {
+          evt = JSON.parse(data)
+        } catch {
+          continue
+        }
+        if (evt.type === 'delta' && evt.content && onDelta) {
+          onDelta(evt.content)
+        } else if (evt.type === 'final' && evt.label) {
+          final = { label: evt.label as AnalysisTag['label'], evidence: evt.evidence || '' }
+        } else if (evt.type === 'fallback') {
+          return null  // 让上层走回退
+        }
+      }
+    }
+    return final
+  } catch {
+    return null
+  }
+}

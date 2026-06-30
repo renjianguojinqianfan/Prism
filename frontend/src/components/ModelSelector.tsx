@@ -1,11 +1,25 @@
 import { useDiscussion } from '../store/DiscussionContext'
-import { PRESET_IDS } from '../config/presetModels'
 
 export function ModelSelector() {
-  const { state, toggleModelEnabled } = useDiscussion()
-  const list = PRESET_IDS.map(id => state.models.find(m => m.id === id)).filter(Boolean) as NonNullable<
-    ReturnType<typeof state.models.find>
-  >[]
+  const { state, toggleModelEnabled, openSettings } = useDiscussion()
+  const list = state.models
+
+  if (list.length === 0) {
+    return (
+      <div className="mb-2 flex items-center gap-3 flex-wrap">
+        <span className="text-[10px] uppercase tracking-widest" style={{ color: 'var(--muted)' }}>
+          参与模型
+        </span>
+        <button
+          onClick={openSettings}
+          className="text-[11px] px-2.5 py-1 rounded-md border border-dashed border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all"
+          style={{ color: 'var(--muted)' }}
+        >
+          <i className="fas fa-plus mr-1"></i>前往配置模型
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="mb-2 flex items-center gap-3 flex-wrap">

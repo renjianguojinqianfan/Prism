@@ -37,7 +37,7 @@ export function MessageList() {
                 抛出一个话题
               </h2>
               <p className="text-sm max-w-md" style={{ color: 'var(--muted)' }}>
-                输入你的想法，邀请多位AI从不同视角展开讨论。他们各自拥有独特的思维风格——有人深度分析，有人天马行空，有人追求落地。
+                推荐添加 3-4 个不同的 AI 模型，让它们从不同视角展开讨论。
               </p>
               <div className="mt-6 flex flex-wrap gap-2 justify-center">
                 {SUGGESTED_TOPICS.map(t => (

@@ -18,6 +18,7 @@ export interface ModelConfig {
 export interface MessageTag {
   label: TagLabel
   evidence?: string
+  analyzer?: string  // 标签由谁评出（模型名 / '本地启发式'）
 }
 
 export interface Message {

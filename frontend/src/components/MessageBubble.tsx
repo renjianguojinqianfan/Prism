@@ -76,6 +76,9 @@ export function MessageBubble({ msg }: { msg: Message }) {
                 title={msg.tag.evidence || ''}
               >
                 {TAG_TEXT[msg.tag.label]}
+                {msg.tag.analyzer && (
+                  <span className="text-[9px] ml-1 opacity-60">· {msg.tag.analyzer}自评</span>
+                )}
               </span>
             )}
           </span>
