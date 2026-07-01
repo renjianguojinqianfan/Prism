@@ -768,8 +768,6 @@ async function runDiscussionLoop() {
 
     // 讨论结束
     renderMessage({ role: 'system', content: '讨论结束' });
-    // 调用真实分析（后端优先，失败时本地启发式回退）
-    await analyzeMessages();
     endDiscussion();
 }
 
@@ -1097,41 +1095,6 @@ function applySingleTag(msgId, label, evidence, analyzer) {
     slot.innerHTML = `<span class="msg-tag ${cls}" data-tag-type="${cls}" title="${(evidence || '').replace(/"/g, '&quot;')}">${text}${analyzerText}</span>`;
 }
 
-async function analyzeMessages() {
-    const aiMsgs = messages.filter(m => m.role === 'assistant');
-    if (aiMsgs.length === 0) return;
-    const payload = {
-        topic: discussionState.topic || '',
-        messages: aiMsgs.map(m => ({ id: m.id, modelName: m.modelName, content: m.content }))
-    };
-    const simulate = document.getElementById('simulateMode')?.checked;
-
-    let tags = null;
-    // 模拟模式直接走本地启发式；真实模式优先尝试后端
-    if (!simulate) {
-        try {
-            const ctrl = new AbortController();
-            const timer = setTimeout(() => ctrl.abort(), 4000);
-            const resp = await fetch(ANALYZE_ENDPOINT, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-                signal: ctrl.signal
-            });
-            clearTimeout(timer);
-            if (resp.ok) {
-                const data = await resp.json();
-                if (Array.isArray(data?.tags)) tags = data.tags;
-            }
-        } catch (e) { /* 网络错误，回退本地 */ }
-    }
-    if (!tags) {
-        tags = localHeuristicAnalyze(payload.messages);
-        showToast('已使用本地分析（后端不可用或模拟模式）', 'info');
-    }
-    applyTags(tags);
-}
-
 // 与后端对齐的极简启发式：基于 2-gram + 英文 token 的 Jaccard 平均相似度
 function localHeuristicAnalyze(items) {
     if (items.length === 0) return [];
@@ -1180,17 +1143,6 @@ function localHeuristicAnalyze(items) {
             evidence = `与其他发言关键词重合度 ${score}（中性区间）`;
         }
         return { id: it.id, label, score, evidence };
-    });
-}
-
-function applyTags(tags) {
-    const TEXT = { consensus: '共识 💡', divergence: '分歧 ⚡', neutral: '中立 ·' };
-    tags.forEach(t => {
-        const slot = document.querySelector(`[data-msg-id="${t.id}"] .msg-tag-slot`);
-        if (!slot) return;
-        const cls = ['consensus','divergence','neutral'].includes(t.label) ? t.label : 'neutral';
-        const text = TEXT[cls];
-        slot.innerHTML = `<span class="msg-tag ${cls}" data-tag-type="${cls}" title="${(t.evidence||'').replace(/"/g,'&quot;')}">${text}</span>`;
     });
 }
 
