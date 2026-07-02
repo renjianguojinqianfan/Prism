@@ -1059,25 +1059,24 @@ async function analyzeSingleMessage(msgId, model, content, round) {
 
     const allItems = priorMsgs.concat([{ id: msgId, modelName: model.name, content }]);
     let tags = null;
-    if (!simulate) {
-        try {
-            const ctrl = new AbortController();
-            const timer = setTimeout(() => ctrl.abort(), 4000);
-            const resp = await fetch(ANALYZE_FALLBACK_ENDPOINT, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ topic: discussionState.topic || '', messages: allItems }),
-                signal: ctrl.signal
-            });
-            clearTimeout(timer);
-            if (resp.ok) {
-                const data = await resp.json();
-                if (Array.isArray(data?.tags)) tags = data.tags;
-            }
-        } catch (e) { /* 网络错误，回退本地 */ }
-    }
+    try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 4000);
+        const resp = await fetch(ANALYZE_FALLBACK_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topic: discussionState.topic || '', messages: allItems }),
+            signal: ctrl.signal
+        });
+        clearTimeout(timer);
+        if (resp.ok) {
+            const data = await resp.json();
+            if (Array.isArray(data?.tags)) tags = data.tags;
+        }
+    } catch (e) { /* 网络错误，回退本地 */ }
     if (!tags) {
         tags = localHeuristicAnalyze(allItems);
+        showToast('已使用本地分析（后端不可用或模拟模式）', 'info');
     }
     const myTag = tags.find(t => t.id === msgId);
     if (myTag) {
