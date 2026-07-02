@@ -179,6 +179,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
   const controlRef = useRef({
     active: false,
     paused: false,
+    skipRequested: false,
     abortController: null as AbortController | null
   })
 
@@ -273,6 +274,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const nextSpeaker = useCallback(() => {
+    controlRef.current.skipRequested = true
     controlRef.current.abortController?.abort()
     showToast('已跳过当前发言者', 'info')
   }, [showToast])
@@ -329,6 +331,11 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
           })
           for (let i = 0; i < reply.length; i++) {
             if (!controlRef.current.active) return
+            if (controlRef.current.skipRequested) {
+              fullContent = reply
+              updateMessage(msgId, { content: fullContent, thinking: true })
+              break
+            }
             while (controlRef.current.paused) {
               await sleep(100)
               if (!controlRef.current.active) return
@@ -337,7 +344,13 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
             updateMessage(msgId, { content: fullContent, thinking: true })
             await sleep(20 + Math.random() * 30)
           }
+          controlRef.current.skipRequested = false
         } else {
+          // 先构建 API 历史（此时 messagesRef.current 不含当前发言的占位消息）
+          controlRef.current.abortController = new AbortController()
+          const history = buildAPIHistory(model, round, topicRef.current, messagesRef.current)
+
+          // 再推占位消息用于 UI 流式显示
           pushMessage({
             id: msgId,
             role: 'assistant',
@@ -347,8 +360,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
             round,
             thinking: true
           })
-          controlRef.current.abortController = new AbortController()
-          const history = buildAPIHistory(model, round, topicRef.current, messagesRef.current)
+
           fullContent = await streamChat(
             model,
             history,
@@ -359,7 +371,12 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
           )
         }
       } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') return
+        if (err instanceof Error && err.name === 'AbortError') {
+          const current = messagesRef.current.find(m => m.id === msgId)
+          const content = current?.content || '[已跳过]'
+          updateMessage(msgId, { content, thinking: false })
+          return
+        }
         fullContent = `[调用失败] ${(err as Error).message}`
         showToast(`${model.name} 调用出错：${(err as Error).message}`, 'error')
       }
@@ -512,6 +529,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
 
       controlRef.current.active = true
       controlRef.current.paused = false
+      controlRef.current.skipRequested = false
       dispatch({ type: 'SET_DISCUSSION_ACTIVE', value: true })
       dispatch({ type: 'SET_PAUSED', value: false })
       dispatch({ type: 'SET_CURRENT_ROUND', value: 0 })
