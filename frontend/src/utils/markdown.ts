@@ -11,6 +11,18 @@ marked.use({
     if (token.type === 'html') {
       token.text = escapeHtml(token.text)
     }
+  },
+  renderer: {
+    link(href: string, title: string | null | undefined, text: string) {
+      if (href && !/^(https?:|mailto:|tel:)/i.test(href)) href = ''
+      const titleAttr = title ? ` title="${escapeHtml(title)}"` : ''
+      return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
+    },
+    image(href: string, title: string | null, text: string) {
+      if (href && !/^https?:/i.test(href)) return ''
+      const titleAttr = title ? ` title="${escapeHtml(title)}"` : ''
+      return `<img src="${href}" alt="${text}"${titleAttr} />`
+    }
   }
 })
 

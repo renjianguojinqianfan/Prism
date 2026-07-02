@@ -43,3 +43,34 @@ describe('renderMarkdown', () => {
     expect(r).toContain('<li>c</li>')
   })
 })
+
+describe('renderMarkdown — 链接协议白名单（XSS 加固）', () => {
+  it('javascript: 链接 → href 被置空', () => {
+    const r = renderMarkdown('[click](javascript:alert(1))')
+    expect(r).not.toContain('javascript:')
+    expect(r).toContain('href=""')
+  })
+
+  it('vbscript: 链接 → href 被置空', () => {
+    const r = renderMarkdown('[x](vbscript:msgbox(1))')
+    expect(r).not.toContain('vbscript:')
+  })
+
+  it('data: 图片 → 整个 img 被移除', () => {
+    const r = renderMarkdown('![img](data:image/png;base64,xxx)')
+    expect(r).not.toContain('<img')
+    expect(r).not.toContain('data:')
+  })
+
+  it('https 链接 → 保留并含 target=_blank 与 rel=noopener', () => {
+    const r = renderMarkdown('[link](https://example.com)')
+    expect(r).toContain('href="https://example.com"')
+    expect(r).toContain('target="_blank"')
+    expect(r).toContain('rel="noopener noreferrer"')
+  })
+
+  it('mailto/tel 链接 → 保留', () => {
+    expect(renderMarkdown('[m](mailto:a@b.com)')).toContain('mailto:a@b.com')
+    expect(renderMarkdown('[t](tel:10086)')).toContain('tel:10086')
+  })
+})
