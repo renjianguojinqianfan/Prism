@@ -15,7 +15,7 @@ const _STOPWORDS = new Set<string>([
   'those', 'it', 'as', 'by', 'with', 'from', 'we', 'you', 'they', 'i', 'he', 'she'
 ])
 
-function _isCjk(ch: string): boolean {
+export function _isCjk(ch: string): boolean {
   if (!ch) return false
   const cp = ch.charCodeAt(0)
   return (
@@ -25,7 +25,7 @@ function _isCjk(ch: string): boolean {
   )
 }
 
-function tokenize(text: string): Set<string> {
+export function tokenize(text: string): Set<string> {
   const tokens = new Set<string>()
   if (!text) return tokens
 
@@ -73,7 +73,7 @@ function tokenize(text: string): Set<string> {
   return tokens
 }
 
-function jaccard(a: Set<string>, b: Set<string>): number {
+export function jaccard(a: Set<string>, b: Set<string>): number {
   if (a.size === 0 && b.size === 0) return 0
   let inter = 0
   a.forEach(t => {

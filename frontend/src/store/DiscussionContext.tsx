@@ -22,7 +22,7 @@ const ANALYZE_ENDPOINT =
 const ANALYZE_FALLBACK_ENDPOINT =
   import.meta.env.VITE_ANALYZE_FALLBACK_ENDPOINT || 'http://localhost:8000/api/analyze'
 
-interface State {
+export interface State {
   models: ModelConfig[]
   messages: Message[]
   simulate: boolean
@@ -36,7 +36,7 @@ interface State {
   toasts: ToastItem[]
 }
 
-type Action =
+export type Action =
   | { type: 'SET_MODELS'; models: ModelConfig[] }
   | { type: 'UPDATE_MODEL'; idx: number; patch: Partial<ModelConfig> }
   | { type: 'ADD_MODEL'; model: ModelConfig }
@@ -94,7 +94,7 @@ function initState(): State {
   }
 }
 
-function reducer(state: State, action: Action): State {
+export function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'SET_MODELS':
       return { ...state, models: action.models }
