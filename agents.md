@@ -15,7 +15,7 @@
   - 分析 Key 管理：发言者自评所需的 endpoint 与 API Key 通过后端环境变量 `PRISM_ANALYZER_API_KEYS`（JSON 字符串，结构 `{"model":{"endpoint":url,"key":apiKey}}`，按 model 名匹配）统一管理，前端只传 model 名，不传 endpoint 也不传 Key（C1 修复，避免 SSRF 与 Key 泄漏）
 - **目录约定**：
   - `frontend/` — React+TS 前端主版本（日常开发目录）
-  - 根目录 `index.html` — 早期单 HTML 原型，保留对照，不再演进
+  - 根目录 `index.html` — 单 HTML 原型，作为演示 demo 与 React 主版本功能同步
   - `backend/` — FastAPI 后端（分层：`app/main` + `app/services` + `app/api` + `tests`）
   - `.trae/specs/` — Spec 驱动开发的规格文档
 
@@ -35,7 +35,7 @@
 - 禁止擅自更改深色赛博朋克 UI 风格
 - 禁止在代码中硬编码 API Key
 - 禁止提交未经用户确认的代码
-- 禁止删除根目录 `index.html`（早期原型，保留用于对照）
+- 禁止删除根目录 `index.html`（早期原型，作为演示 demo 保留）
 - 禁止在前端引入除 marked 之外的大型依赖（如 UI 组件库、图表库）除非用户明确要求
 
 ## 3. 文件清单
@@ -44,9 +44,10 @@
 
 | 文件 | 用途 |
 |------|------|
-| `package.json` | 依赖与 scripts（dev/build/preview/typecheck） |
+| `package.json` | 依赖与 scripts（dev/build/preview/typecheck/test/test:run） |
 | `tsconfig.json` / `tsconfig.node.json` | TS 严格模式配置 |
 | `vite.config.ts` | Vite 配置（默认端口 5173） |
+| `vitest.config.ts` | Vitest 配置（jsdom + globals + 测试文件 glob） |
 | `tailwind.config.js` / `postcss.config.js` | Tailwind 配置 |
 | `.env.example` | 前端环境变量示例（`VITE_ANALYZE_ENDPOINT` / `VITE_ANALYZE_FALLBACK_ENDPOINT`） |
 | `src/main.tsx` | React 挂载入口 |
@@ -61,6 +62,7 @@
 | `src/utils/escape.ts` | HTML 转义 |
 | `src/utils/markdown.ts` | marked 封装（失败回退到 escape） |
 | `src/utils/sleep.ts` | 延时工具 + `genId` |
+| `src/**/*.test.{ts,tsx}` | Vitest 单元测试（7 个文件：services × 3 / store × 1 / utils × 3，共 75 用例） |
 | `src/components/Header.tsx` | 顶栏（Prism 标题 / 导出 / 配置模型） |
 | `src/components/RoleBar.tsx` | 角色状态条（发言脉冲动画） |
 | `src/components/ModelSelector.tsx` | 输入框上方模型复选框 |
@@ -84,11 +86,11 @@
 | `backend/app/api/health.py` | `GET /api/health` |
 | `backend/app/api/analyze.py` | `POST /api/analyze` + `POST /api/analyze/stream` |
 | `backend/requirements.txt` | 运行时依赖（fastapi、uvicorn、pydantic、httpx） |
-| `backend/requirements-dev.txt` | 开发依赖（pytest、pytest-asyncio） |
-| `backend/pytest.ini` | pytest 配置 |
+| `backend/requirements-dev.txt` | 开发依赖（pytest、pytest-asyncio、respx） |
+| `backend/pytest.ini` | pytest 配置（asyncio_mode=auto） |
 | `backend/.env.example` | 后端环境变量示例 |
-| `backend/tests/` | pytest 测试（conftest + test_heuristic + test_api） |
-| `index.html` | 早期单 HTML 原型（保留对照，不再演进） |
+| `backend/tests/` | pytest 测试（conftest + 5 个测试模块：heuristic / analyzer / config / api / api_stream，共 63 用例） |
+| `index.html` | 单 HTML 原型（作为演示 demo，与 React 主版本功能同步） |
 | `.gitignore` | Git 忽略规则 |
 | `.trae/specs/` | Spec 驱动开发的规格文档（spec.md / tasks.md / checklist.md） |
 
@@ -97,8 +99,9 @@
 1. **启动前端**：`cd frontend && npm install && npm run dev` → [http://localhost:5173](http://localhost:5173)
 2. **启动后端**（可选，共识/分歧真实分析）：`cd backend && pip install -r requirements.txt && uvicorn main:app --reload --port 8000`
 3. **后端测试**：`cd backend && pip install -r requirements-dev.txt && pytest`
-4. **类型检查**：`cd frontend && npm run typecheck`（提交前必须通过）
-5. **构建验证**：`cd frontend && npm run build`（tsc + vite 打包，产物在 `frontend/dist/`）
+4. **前端测试**：`cd frontend && npm run test:run`（vitest 一次性运行所有用例；`npm test` 进入 watch 模式）
+5. **类型检查**：`cd frontend && npm run typecheck`（提交前必须通过）
+6. **构建验证**：`cd frontend && npm run build`（tsc + vite 打包，产物在 `frontend/dist/`）
 
 ## 5. Git 提交规范
 

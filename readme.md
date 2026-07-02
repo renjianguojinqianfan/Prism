@@ -83,3 +83,52 @@ uvicorn main:app --reload --port 8000
 健康检查：浏览器访问 `http://localhost:8000/api/health` 应返回 `{"status":"ok"}`。
 
 前端默认通过环境变量 `VITE_ANALYZE_ENDPOINT` 指向 `http://localhost:8000/api/analyze/stream`（主路径），`VITE_ANALYZE_FALLBACK_ENDPOINT` 指向 `http://localhost:8000/api/analyze`（Jaccard 回退）；复制 `frontend/.env.example` 为 `frontend/.env` 可修改。
+
+## 开发与测试
+
+### 单元测试
+
+项目为前后端均搭建了单元测试基础设施，提交前需保证全绿。
+
+**后端（pytest，63 用例 / 5 模块）**：
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest                # 一次性运行
+pytest -q             # 安静模式
+```
+
+覆盖范围：`heuristic`（Jaccard 启发式）/ `analyzer`（流式自评 prompt 构造 + SSE 解析）/ `config`（环境变量解析）/ `api`（端点集成）/ `api_stream`（SSE 端到端，使用 respx 全局拦截 httpx）。
+
+**前端（vitest，75 用例 / 7 文件）**：
+
+```bash
+cd frontend
+npm install
+npm run test:run      # 一次性运行
+npm test              # watch 模式
+```
+
+覆盖范围：`services/{simulator,api,analyzer}.test.ts` / `store/reducer.test.ts` / `utils/{escape,markdown,sleep}.test.ts`。
+
+测试基础设施说明：
+- 后端 `conftest.py` 提供 `client`（TestClient）与 `patch_analyzer_keys`（monkeypatch 环境变量）两个 fixture；流式测试用 `httpx.MockTransport` + `AsyncIteratorByteStream` 控制跨缓冲区边界
+- 前端 `vitest.config.ts` 配置 jsdom 环境 + globals 模式；`src/vite-env.d.ts` 引入 `vitest/globals` 类型
+- 为可测试性，源文件做了最小 export 调整（`analyzer.ts` 的 `tokenize` / `jaccard` / `_isCjk`；`DiscussionContext.tsx` 的 `reducer` / `State` / `Action`），无行为变化
+
+### 类型检查与构建
+
+```bash
+cd frontend
+npm run typecheck     # tsc --noEmit，0 错误
+npm run build         # tsc -b && vite build，产物在 frontend/dist/
+```
+
+### 联调验证
+
+启动前后端后，模拟模式下发起一次多模型讨论（推荐 4 模型 × 2 轮），观察：
+
+- 每条 AI 发言后即时落定「共识 💡 / 分歧 ⚡ / 中立 ·」标签（带「· {analyzer} 自评」后缀）
+- 后端控制台可见 `POST /api/analyze` 200 日志（模拟模式也调用，作为 Jaccard 回退）
+- 讨论结束「讨论结束」系统消息出现后，已有标签不被覆盖
