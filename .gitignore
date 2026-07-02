@@ -4,6 +4,7 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
+.pytest_cache/
 
 # Environment
 .env
@@ -34,6 +35,9 @@ dist/
 test-results/
 playwright-report/
 playwright/.cache/
+
+# Trae IDE
+.trae/screenshots/
 
 # Python venv
 .venv/
