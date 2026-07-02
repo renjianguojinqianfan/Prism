@@ -9,14 +9,14 @@
 - **项目类型**：`web`（前后端分离 SPA + 轻量 FastAPI 后端）
 - **技术栈**：
   - 前端：React 18 + TypeScript（strict）+ Vite + Tailwind CSS；状态管理用 Context + useReducer；Markdown 渲染用 marked
-  - 后端：FastAPI（`main.py`）+ httpx，提供 `GET /api/health` 健康检查、`POST /api/analyze`（Jaccard 同步回退）与 `POST /api/analyze/stream`（发言者自评 SSE 流式）三个端点
+  - 后端：FastAPI（`backend/` 分层包）+ httpx，提供 `GET /api/health` 健康检查、`POST /api/analyze`（Jaccard 同步回退）与 `POST /api/analyze/stream`（发言者自评 SSE 流式）三个端点
   - 部署：Vercel / Render（前端 dist 静态托管，后端 uvicorn）
   - 模型调用：浏览器端直连各家 OpenAI 兼容 API（流式 SSE），未配 Key 的模型自动跳过
   - 分析 Key 管理：发言者自评所需的 endpoint 与 API Key 通过后端环境变量 `PRISM_ANALYZER_API_KEYS`（JSON 字符串，结构 `{"model":{"endpoint":url,"key":apiKey}}`，按 model 名匹配）统一管理，前端只传 model 名，不传 endpoint 也不传 Key（C1 修复，避免 SSRF 与 Key 泄漏）
 - **目录约定**：
   - `frontend/` — React+TS 前端主版本（日常开发目录）
   - 根目录 `index.html` — 早期单 HTML 原型，保留对照，不再演进
-  - 根目录 `main.py` — FastAPI 后端
+  - `backend/` — FastAPI 后端（分层：`app/main` + `app/services` + `app/api` + `tests`）
   - `.trae/specs/` — Spec 驱动开发的规格文档
 
 ## 2. 关键规则
@@ -29,7 +29,7 @@
 - **无第三方状态库**：状态统一在 `DiscussionContext.tsx` 中用 `useReducer`+`useRef` 管理，不要引入 Redux/Zustand/Jotai 等
 - **组件拆分原则**：按现有目录约定放置，新增组件放 `frontend/src/components/`，纯逻辑放 `services/` 或 `utils/`，类型集中在 `store/types.ts`
 - **禁止硬编码密钥**：发言用 API Key 通过用户输入 + localStorage 持久化；发言者自评用 endpoint 与 API Key 通过后端环境变量 `PRISM_ANALYZER_API_KEYS`（JSON 字符串，结构 `{"model":{"endpoint":url,"key":apiKey}}`，按 model 名匹配）统一读取，前端只传 model 名，不传 endpoint 也不传 Key（C1 修复，避免 SSRF 与 Key 泄漏）；后端端口等配置通过环境变量读取
-- **后端/前端阈值同步**：Jaccard 回退路径的阈值（当前 HIGH=0.14, LOW=0.11）前后端必须保持一致，改一处必须改另一处（见 `frontend/src/services/analyzer.ts` 与 `main.py`）。注意：主路径为「发言者自评 LLM」，Jaccard 仅在自评失败时回退
+- **后端/前端阈值同步**：Jaccard 回退路径的阈值（当前 HIGH=0.14, LOW=0.11）前后端必须保持一致，改一处必须改另一处（见 `frontend/src/services/analyzer.ts` 与 `backend/app/config.py`）。注意：主路径为「发言者自评 LLM」，Jaccard 仅在自评失败时回退
 
 ### 禁止事项
 - 禁止擅自更改深色赛博朋克 UI 风格
@@ -70,13 +70,24 @@
 | `src/components/SettingsPanel.tsx` | 模型配置侧边面板（快速添加模板 + 自定义模型增删） |
 | `src/components/Toast.tsx` | 操作提示 |
 
-### 后端 & 根目录
+### 后端（backend/）与根目录
 
 | 文件 | 用途 |
 |------|------|
-| `main.py` | FastAPI 后端入口（`/api/health` + `/api/analyze` + `/api/analyze/stream`） |
-| `requirements.txt` | Python 依赖（fastapi、uvicorn、pydantic、httpx） |
-| `.env.example` | 后端环境变量示例 |
+| `backend/main.py` | uvicorn 入口（`uvicorn main:app`，仅启动） |
+| `backend/app/main.py` | FastAPI app 实例 + CORS + 路由注册 |
+| `backend/app/config.py` | 配置：CORS 来源 / 阈值 / `load_analyzer_keys()` |
+| `backend/app/schemas.py` | Pydantic 模型（Message / Tag / AnalyzeRequest 等） |
+| `backend/app/services/heuristic.py` | Jaccard 启发式分析（`analyze()`） |
+| `backend/app/services/analyzer.py` | 流式自评（prompt 构造 / 解析 / `stream_self_eval()`） |
+| `backend/app/api/deps.py` | 依赖注入：`get_llm_client()`（可测试替换） |
+| `backend/app/api/health.py` | `GET /api/health` |
+| `backend/app/api/analyze.py` | `POST /api/analyze` + `POST /api/analyze/stream` |
+| `backend/requirements.txt` | 运行时依赖（fastapi、uvicorn、pydantic、httpx） |
+| `backend/requirements-dev.txt` | 开发依赖（pytest、pytest-asyncio） |
+| `backend/pytest.ini` | pytest 配置 |
+| `backend/.env.example` | 后端环境变量示例 |
+| `backend/tests/` | pytest 测试（conftest + test_heuristic + test_api） |
 | `index.html` | 早期单 HTML 原型（保留对照，不再演进） |
 | `.gitignore` | Git 忽略规则 |
 | `.trae/specs/` | Spec 驱动开发的规格文档（spec.md / tasks.md / checklist.md） |
@@ -84,9 +95,10 @@
 ## 4. 开发工作流
 
 1. **启动前端**：`cd frontend && npm install && npm run dev` → [http://localhost:5173](http://localhost:5173)
-2. **启动后端**（可选，共识/分歧真实分析）：`pip install -r requirements.txt && uvicorn main:app --reload --port 8000`
-3. **类型检查**：`cd frontend && npm run typecheck`（提交前必须通过）
-4. **构建验证**：`cd frontend && npm run build`（tsc + vite 打包，产物在 `frontend/dist/`）
+2. **启动后端**（可选，共识/分歧真实分析）：`cd backend && pip install -r requirements.txt && uvicorn main:app --reload --port 8000`
+3. **后端测试**：`cd backend && pip install -r requirements-dev.txt && pytest`
+4. **类型检查**：`cd frontend && npm run typecheck`（提交前必须通过）
+5. **构建验证**：`cd frontend && npm run build`（tsc + vite 打包，产物在 `frontend/dist/`）
 
 ## 5. Git 提交规范
 

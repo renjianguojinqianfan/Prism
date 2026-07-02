@@ -64,7 +64,7 @@ npm run dev
 
 ### 环境变量配置
 
-在根目录 `.env` 中设置（参考 `.env.example`）：
+在 `backend/.env` 中设置（参考 `backend/.env.example`）：
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
@@ -75,6 +75,7 @@ npm run dev
 ### 启动命令
 
 ```bash
+cd backend
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
