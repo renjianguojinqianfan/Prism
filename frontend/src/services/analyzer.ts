@@ -127,18 +127,21 @@ export async function fetchAnalysis(
   try {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), timeoutMs)
-    const resp = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: ctrl.signal
-    })
-    clearTimeout(timer)
-    if (resp.ok) {
-      const data = await resp.json()
-      if (Array.isArray(data?.tags)) return data.tags as AnalysisTag[]
+    try {
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: ctrl.signal
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        if (Array.isArray(data?.tags)) return data.tags as AnalysisTag[]
+      }
+      return null
+    } finally {
+      clearTimeout(timer)
     }
-    return null
   } catch {
     return null
   }
@@ -177,46 +180,49 @@ export async function streamAnalysis(
   try {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), timeoutMs)
-    const resp = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: ctrl.signal,
-    })
-    clearTimeout(timer)
-    if (!resp.ok || !resp.body) return null
+    try {
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: ctrl.signal,
+      })
+      if (!resp.ok || !resp.body) return null
 
-    const reader = resp.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    let final: StreamAnalysisResult | null = null
+      const reader = resp.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let final: StreamAnalysisResult | null = null
 
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed.startsWith('data: ')) continue
-        const data = trimmed.slice(6)
-        let evt: { type: string; content?: string; label?: string; evidence?: string }
-        try {
-          evt = JSON.parse(data)
-        } catch {
-          continue
-        }
-        if (evt.type === 'delta' && evt.content && onDelta) {
-          onDelta(evt.content)
-        } else if (evt.type === 'final' && evt.label) {
-          final = { label: evt.label as AnalysisTag['label'], evidence: evt.evidence || '' }
-        } else if (evt.type === 'fallback') {
-          return null  // 让上层走回退
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed.startsWith('data: ')) continue
+          const data = trimmed.slice(6)
+          let evt: { type: string; content?: string; label?: string; evidence?: string }
+          try {
+            evt = JSON.parse(data)
+          } catch {
+            continue
+          }
+          if (evt.type === 'delta' && evt.content && onDelta) {
+            onDelta(evt.content)
+          } else if (evt.type === 'final' && evt.label) {
+            final = { label: evt.label as AnalysisTag['label'], evidence: evt.evidence || '' }
+          } else if (evt.type === 'fallback') {
+            return null  // 让上层走回退
+          }
         }
       }
+      return final
+    } finally {
+      clearTimeout(timer)
     }
-    return final
   } catch {
     return null
   }
