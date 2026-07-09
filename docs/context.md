@@ -19,15 +19,15 @@
 | `src/App.tsx` | 顶层布局（Provider + 浮动光点 + 面板） |
 | `src/App.css` | 全局深色主题、动效、气泡/标签样式 |
 | `src/store/types.ts` | 全部 TS 类型定义（Message / ModelConfig / Tag 等） |
-| `src/store/DiscussionContext.tsx` | 状态 reducer + 讨论循环编排（start/pause/reset/export） |
+| `src/store/DiscussionContext.tsx` | 状态 reducer + 讨论循环编排（start/pause/reset/export + discussion token 防并发 + streamChat 超时兜底） |
 | `src/config/presetModels.ts` | 5 个快速添加模板（DeepSeek/Kimi/GLM/通义/Mimo）与 localStorage key |
 | `src/services/api.ts` | `buildAPIHistory` 历史拼接 + `streamChat` SSE 解析 |
 | `src/services/simulator.ts` | 模拟模式模板回复生成（按轮次确定性取模板） |
-| `src/services/analyzer.ts` | 本地 Jaccard 启发式分析 + 后端 `fetchAnalysis` 调用 + SSE `streamAnalysis` 解析 |
-| `src/utils/escape.ts` | HTML 转义 |
-| `src/utils/markdown.ts` | marked 封装（失败回退到 escape） |
+| `src/services/analyzer.ts` | 本地 Jaccard 启发式分析 + 后端 `fetchAnalysis` 调用 + SSE `streamAnalysis` 解析（全程超时保护） |
+| `src/utils/escape.ts` | HTML 转义（含 `"` `'` 属性上下文转义） |
+| `src/utils/markdown.ts` | marked 封装（href/src 属性转义 + 协议白名单 + 失败回退到 escape） |
 | `src/utils/sleep.ts` | 延时工具 + `genId` |
-| `src/**/*.test.{ts,tsx}` | Vitest 单元测试（7 个文件：services × 3 / store × 1 / utils × 3，共 80 用例） |
+| `src/**/*.test.{ts,tsx}` | Vitest 单元测试（7 个文件：services × 3 / store × 1 / utils × 3，共 82 用例） |
 | `src/components/Header.tsx` | 顶栏（Prism 标题 / 导出 / 配置模型） |
 | `src/components/RoleBar.tsx` | 角色状态条（发言脉冲动画） |
 | `src/components/ModelSelector.tsx` | 输入框上方模型复选框 |
