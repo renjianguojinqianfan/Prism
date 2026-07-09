@@ -1,8 +1,7 @@
 # AGENTS.md - 棱镜 (Prism)
 
 > 本文件为 AI 编程助手的核心指令集，优先级高于所有口头约定。
-> 深层上下文（文件清单、架构、约定）见 [docs/context.md](docs/context.md)。
-> 跨会话状态见 [.harness/progress.json](.harness/progress.json)。
+> 深层上下文（架构、约定）见 [docs/context.md](docs/context.md)。
 
 ## 1. 项目快照
 
@@ -40,12 +39,11 @@ make verify
 - `frontend/` — React+TS 前端主版本（日常开发目录）
 - `backend/` — FastAPI 后端（分层：`app/main` + `app/services` + `app/api` + `tests`）
 - `index.html` — 单 HTML 原型（演示 demo，**禁止删除**）
-- `docs/context.md` — 深层上下文（完整文件清单、架构、约定）
-- `.harness/progress.json` — 跨会话状态记录
-- `Makefile` — 质量门禁命令
-- `.trae/specs/` — Spec 驱动开发的规格文档
+- `docs/context.md` - 深层上下文（架构、约定）
+- `Makefile` - 质量门禁命令
+- `.trae/specs/` - Spec 驱动开发的规格文档
 
-**详细文件清单与架构说明见 [docs/context.md](docs/context.md)。**
+**架构说明见 [docs/context.md](docs/context.md)。**
 
 ## 4. 关键约定
 
@@ -89,8 +87,12 @@ make verify
 每次开发完成后，必须检查以下文件是否需要同步：
 
 - **AGENTS.md** - 行为边界、约定、命令等有变化时更新
-- **docs/context.md** - 文件清单描述、测试用例数、架构说明有变化时同步
-- **.harness/progress.json** - 跨会话状态，记录当前阶段、时间戳、工作摘要
+- **docs/context.md** - 架构说明有变化时同步（文件清单不再手动维护，直接用 Glob/LS 扫描）
+
+Git hooks 自动执行质量门禁，无需手动维护：
+
+- `pre-commit` - 提交前运行 `make verify`，失败阻止提交
+- `commit-msg` - 校验 commit message 格式，不符合阻止提交
 
 ## 8. Git 提交规范
 
