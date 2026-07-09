@@ -15,13 +15,14 @@ marked.use({
   renderer: {
     link(href: string, title: string | null | undefined, text: string) {
       if (href && !/^(https?:|mailto:|tel:)/i.test(href)) href = ''
-      const titleAttr = title ? ` title="${escapeHtml(title)}"` : ''
-      return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
+      // title 已被 marked 预转义，无需重复 escapeHtml（否则二次转义导致 &quot; 显示为 &amp;quot;）
+      const titleAttr = title ? ` title="${title}"` : ''
+      return `<a href="${escapeHtml(href)}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
     },
     image(href: string, title: string | null, text: string) {
       if (href && !/^https?:/i.test(href)) return ''
-      const titleAttr = title ? ` title="${escapeHtml(title)}"` : ''
-      return `<img src="${href}" alt="${text}"${titleAttr} />`
+      const titleAttr = title ? ` title="${title}"` : ''
+      return `<img src="${escapeHtml(href)}" alt="${text}"${titleAttr} />`
     }
   }
 })

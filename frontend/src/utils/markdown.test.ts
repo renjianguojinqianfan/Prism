@@ -69,8 +69,21 @@ describe('renderMarkdown — 链接协议白名单（XSS 加固）', () => {
     expect(r).toContain('rel="noopener noreferrer"')
   })
 
-  it('mailto/tel 链接 → 保留', () => {
+  it('mailto/tel 链接 -> 保留', () => {
     expect(renderMarkdown('[m](mailto:a@b.com)')).toContain('mailto:a@b.com')
     expect(renderMarkdown('[t](tel:10086)')).toContain('tel:10086')
+  })
+})
+
+describe('renderMarkdown - href/src 双引号注入防护（XSS 加固）', () => {
+  it('link href 含双引号 -> 属性注入被阻断', () => {
+    const r = renderMarkdown('[click](<https://evil.com" onmouseover="alert(1)>)')
+    // " 被转义为 &quot;，onmouseover 在 href 属性值内部，不是独立属性
+    expect(r).not.toMatch(/"\s+onmouseover/i)
+  })
+
+  it('image src 含双引号 -> 属性注入被阻断', () => {
+    const r = renderMarkdown('![img](<https://evil.com" onerror="alert(1)>)')
+    expect(r).not.toMatch(/"\s+onerror/i)
   })
 })
