@@ -84,7 +84,15 @@ make verify
 
 等价快捷方式：`make verify` 一键全检通过。
 
-## 7. Git 提交规范
+## 7. 上下文维护
+
+每次开发完成后，必须检查以下文件是否需要同步：
+
+- **AGENTS.md** - 行为边界、约定、命令等有变化时更新
+- **docs/context.md** - 文件清单描述、测试用例数、架构说明有变化时同步
+- **.harness/progress.json** - 跨会话状态，记录当前阶段、时间戳、工作摘要
+
+## 8. Git 提交规范
 
 - commit message 格式：`<type>: <描述>`
 - type 可选：`feat` / `fix` / `style` / `refactor` / `docs` / `chore`
