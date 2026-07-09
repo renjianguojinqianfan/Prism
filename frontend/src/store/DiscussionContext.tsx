@@ -180,7 +180,8 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
     active: false,
     paused: false,
     skipRequested: false,
-    abortController: null as AbortController | null
+    abortController: null as AbortController | null,
+    discussionToken: null as string | null
   })
 
   useEffect(() => {
@@ -282,6 +283,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
   const resetDiscussion = useCallback(() => {
     controlRef.current.active = false
     controlRef.current.paused = false
+    controlRef.current.discussionToken = null
     controlRef.current.abortController?.abort()
     messagesRef.current = []
     dispatch({ type: 'CLEAR_MESSAGES' })
@@ -307,13 +309,14 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
     const endDiscussion = () => {
       controlRef.current.active = false
       controlRef.current.paused = false
+      controlRef.current.discussionToken = null
       dispatch({ type: 'SET_DISCUSSION_ACTIVE', value: false })
       dispatch({ type: 'SET_PAUSED', value: false })
       dispatch({ type: 'SET_SPEAKING', id: null })
       dispatch({ type: 'SET_CURRENT_ROUND', value: 0 })
     }
 
-    const generateResponse = async (model: ModelConfig, round: number, simulate: boolean) => {
+    const generateResponse = async (model: ModelConfig, round: number, simulate: boolean, token: string) => {
       const msgId = genId()
       let fullContent = ''
 
@@ -330,7 +333,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
             thinking: true
           })
           for (let i = 0; i < reply.length; i++) {
-            if (!controlRef.current.active) return
+            if (!controlRef.current.active || controlRef.current.discussionToken !== token) return
             if (controlRef.current.skipRequested) {
               fullContent = reply
               updateMessage(msgId, { content: fullContent, thinking: true })
@@ -338,7 +341,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
             }
             while (controlRef.current.paused) {
               await sleep(100)
-              if (!controlRef.current.active) return
+              if (!controlRef.current.active || controlRef.current.discussionToken !== token) return
             }
             fullContent += reply[i]
             updateMessage(msgId, { content: fullContent, thinking: true })
@@ -348,27 +351,32 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
         } else {
           // 先构建 API 历史（此时 messagesRef.current 不含当前发言的占位消息）
           controlRef.current.abortController = new AbortController()
-          const history = buildAPIHistory(model, round, topicRef.current, messagesRef.current)
+          const timeoutTimer = setTimeout(() => controlRef.current.abortController?.abort(), 120000)
+          try {
+            const history = buildAPIHistory(model, round, topicRef.current, messagesRef.current)
 
-          // 再推占位消息用于 UI 流式显示
-          pushMessage({
-            id: msgId,
-            role: 'assistant',
-            content: '',
-            modelId: model.id,
-            modelName: model.name,
-            round,
-            thinking: true
-          })
+            // 再推占位消息用于 UI 流式显示
+            pushMessage({
+              id: msgId,
+              role: 'assistant',
+              content: '',
+              modelId: model.id,
+              modelName: model.name,
+              round,
+              thinking: true
+            })
 
-          fullContent = await streamChat(
-            model,
-            history,
-            controlRef.current.abortController.signal,
-            (_delta, full) => {
-              updateMessage(msgId, { content: full, thinking: true })
-            }
-          )
+            fullContent = await streamChat(
+              model,
+              history,
+              controlRef.current.abortController.signal,
+              (_delta, full) => {
+                updateMessage(msgId, { content: full, thinking: true })
+              }
+            )
+          } finally {
+            clearTimeout(timeoutTimer)
+          }
         }
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
@@ -451,7 +459,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const runDiscussion = async (simulate: boolean) => {
+    const runDiscussion = async (simulate: boolean, token: string) => {
       const enabledModels = state.models.filter(m => m.enabled)
       if (enabledModels.length === 0) return
 
@@ -460,9 +468,9 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
         for (const model of enabledModels) {
           while (controlRef.current.paused) {
             await sleep(200)
-            if (!controlRef.current.active) return
+            if (!controlRef.current.active || controlRef.current.discussionToken !== token) return
           }
-          if (!controlRef.current.active) return
+          if (!controlRef.current.active || controlRef.current.discussionToken !== token) return
 
           if (!simulate && !model.apiKey) {
             pushMessage({
@@ -476,8 +484,9 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
           }
 
           dispatch({ type: 'SET_SPEAKING', id: model.id })
-          await generateResponse(model, round, simulate)
+          await generateResponse(model, round, simulate, token)
           dispatch({ type: 'SET_SPEAKING', id: null })
+          if (controlRef.current.discussionToken !== token) return
 
           // 实时增量分析：发言结束后立即分析这条（不等到全部讨论结束）
           const aiMsgs = messagesRef.current.filter(m => m.role === 'assistant' && !m.thinking)
@@ -530,6 +539,8 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
       controlRef.current.active = true
       controlRef.current.paused = false
       controlRef.current.skipRequested = false
+      const token = genId()
+      controlRef.current.discussionToken = token
       dispatch({ type: 'SET_DISCUSSION_ACTIVE', value: true })
       dispatch({ type: 'SET_PAUSED', value: false })
       dispatch({ type: 'SET_CURRENT_ROUND', value: 0 })
@@ -553,7 +564,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
       })
 
       topicRef.current = topic
-      void runDiscussion(state.simulate)
+      void runDiscussion(state.simulate, token)
     }
 
     const exportDiscussion = () => {
