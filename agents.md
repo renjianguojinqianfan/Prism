@@ -90,4 +90,5 @@ make verify
 - type 可选：`feat` / `fix` / `style` / `refactor` / `docs` / `chore`
 - 描述用中文，一句话说清改动
 - 示例：`feat: 迁移至 React+TypeScript`
+- **分批次多次小步提交**：每个逻辑独立的小改动单独一个 commit，不要把多个不相关的修复堆在一个 commit 里
 - **禁止提交未经用户确认的代码**
