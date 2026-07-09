@@ -1,6 +1,8 @@
 # AGENTS.md - 棱镜 (Prism)
 
 > 本文件为 AI 编程助手的核心指令集，优先级高于所有口头约定。
+> 深层上下文（文件清单、架构、约定）见 [docs/context.md](docs/context.md)。
+> 跨会话状态见 [.harness/progress.json](.harness/progress.json)。
 
 ## 1. 项目快照
 
@@ -9,17 +11,43 @@
 - **项目类型**：`web`（前后端分离 SPA + 轻量 FastAPI 后端）
 - **技术栈**：
   - 前端：React 18 + TypeScript（strict）+ Vite + Tailwind CSS；状态管理用 Context + useReducer；Markdown 渲染用 marked
-  - 后端：FastAPI（`backend/` 分层包）+ httpx，提供 `GET /api/health` 健康检查、`POST /api/analyze`（Jaccard 同步回退）与 `POST /api/analyze/stream`（发言者自评 SSE 流式）三个端点
-  - 部署：Vercel / Render（前端 dist 静态托管，后端 uvicorn）
+  - 后端：FastAPI（`backend/` 分层包）+ httpx（3 个端点详见 [docs/context.md](docs/context.md#34-后端-api-端点)）
   - 模型调用：浏览器端直连各家 OpenAI 兼容 API（流式 SSE），未配 Key 的模型自动跳过
-  - 分析 Key 管理：发言者自评所需的 endpoint 与 API Key 通过后端环境变量 `PRISM_ANALYZER_API_KEYS`（JSON 字符串，结构 `{"model":{"endpoint":url,"key":apiKey}}`，按 model 名匹配）统一管理，前端只传 model 名，不传 endpoint 也不传 Key（C1 修复，避免 SSRF 与 Key 泄漏）
-- **目录约定**：
-  - `frontend/` — React+TS 前端主版本（日常开发目录）
-  - 根目录 `index.html` — 单 HTML 原型，作为演示 demo 与 React 主版本功能同步
-  - `backend/` — FastAPI 后端（分层：`app/main` + `app/services` + `app/api` + `tests`）
-  - `.trae/specs/` — Spec 驱动开发的规格文档
 
-## 2. 关键规则
+## 2. 常用命令
+
+```bash
+# 前端开发
+cd frontend && npm install
+npm run dev          # 开发服务器 → http://localhost:5173
+npm run test:run     # vitest 一次性运行所有用例（npm test 进入 watch 模式）
+npm run typecheck    # TS 严格模式检查（提交前必须通过）
+npm run build        # 构建（tsc + vite 打包，产物在 frontend/dist/）
+
+# 后端开发
+cd backend && pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+pip install -r requirements-dev.txt && pytest
+
+# 一键质量门禁（推荐提交前运行）
+make verify
+# Windows 无 make 时的等价命令：
+# cd frontend && npm run test:run && npm run typecheck && cd ../backend && pytest
+```
+
+## 3. 目录结构（概要）
+
+- `frontend/` — React+TS 前端主版本（日常开发目录）
+- `backend/` — FastAPI 后端（分层：`app/main` + `app/services` + `app/api` + `tests`）
+- `index.html` — 单 HTML 原型（演示 demo，**禁止删除**）
+- `docs/context.md` — 深层上下文（完整文件清单、架构、约定）
+- `.harness/progress.json` — 跨会话状态记录
+- `Makefile` — 质量门禁命令
+- `.trae/specs/` — Spec 驱动开发的规格文档
+
+**详细文件清单与架构说明见 [docs/context.md](docs/context.md)。**
+
+## 4. 关键约定
 
 ### 必须遵守
 - **改代码前先说明计划**：不得直接改代码，必须先向用户确认方案
@@ -38,72 +66,25 @@
 - 禁止删除根目录 `index.html`（早期原型，作为演示 demo 保留）
 - 禁止在前端引入除 marked 之外的大型依赖（如 UI 组件库、图表库）除非用户明确要求
 
-## 3. 文件清单
+## 5. 行为边界
 
-### 前端（frontend/）
+- ✅ **允许**：修改 `frontend/src/` 与 `backend/app/` 下代码；运行测试与类型检查；编写单元测试
+- ⚠️ **需确认**：改代码前必须先说明计划并获用户确认；提交代码前必须获用户确认；修改 `package.json` / `requirements.txt` 依赖；修改阈值（前后端必须同步）
+- 🚫 **禁止**：见第 4 章"禁止事项"全部条目
 
-| 文件 | 用途 |
-|------|------|
-| `package.json` | 依赖与 scripts（dev/build/preview/typecheck/test/test:run） |
-| `tsconfig.json` / `tsconfig.node.json` | TS 严格模式配置 |
-| `vite.config.ts` | Vite 配置（默认端口 5173） |
-| `vitest.config.ts` | Vitest 配置（jsdom + globals + 测试文件 glob） |
-| `tailwind.config.js` / `postcss.config.js` | Tailwind 配置 |
-| `.env.example` | 前端环境变量示例（`VITE_ANALYZE_ENDPOINT` / `VITE_ANALYZE_FALLBACK_ENDPOINT`） |
-| `src/main.tsx` | React 挂载入口 |
-| `src/App.tsx` | 顶层布局（Provider + 浮动光点 + 面板） |
-| `src/App.css` | 全局深色主题、动效、气泡/标签样式 |
-| `src/store/types.ts` | 全部 TS 类型定义（Message / ModelConfig / Tag 等） |
-| `src/store/DiscussionContext.tsx` | 状态 reducer + 讨论循环编排（start/pause/reset/export） |
-| `src/config/presetModels.ts` | 5 个快速添加模板（DeepSeek/Kimi/GLM/通义/Mimo）与 localStorage key |
-| `src/services/api.ts` | `buildAPIHistory` 历史拼接 + `streamChat` SSE 解析 |
-| `src/services/simulator.ts` | 模拟模式模板回复生成（按轮次确定性取模板） |
-| `src/services/analyzer.ts` | 本地 Jaccard 启发式分析 + 后端 `fetchAnalysis` 调用 + SSE `streamAnalysis` 解析 |
-| `src/utils/escape.ts` | HTML 转义 |
-| `src/utils/markdown.ts` | marked 封装（失败回退到 escape） |
-| `src/utils/sleep.ts` | 延时工具 + `genId` |
-| `src/**/*.test.{ts,tsx}` | Vitest 单元测试（7 个文件：services × 3 / store × 1 / utils × 3，共 75 用例） |
-| `src/components/Header.tsx` | 顶栏（Prism 标题 / 导出 / 配置模型） |
-| `src/components/RoleBar.tsx` | 角色状态条（发言脉冲动画） |
-| `src/components/ModelSelector.tsx` | 输入框上方模型复选框 |
-| `src/components/MessageList.tsx` | 消息列表 + 欢迎页推荐话题 |
-| `src/components/MessageBubble.tsx` | 消息气泡（标签 + Markdown + 打字光标） |
-| `src/components/InputBar.tsx` | 输入框 + 控制条（发起/插话/暂停/跳过/重置/轮次/模拟开关） |
-| `src/components/SettingsPanel.tsx` | 模型配置侧边面板（快速添加模板 + 自定义模型增删） |
-| `src/components/Toast.tsx` | 操作提示 |
+## 6. 完成定义（Definition of Done）
 
-### 后端（backend/）与根目录
+一个任务真正"完成"的标志（全部满足）：
 
-| 文件 | 用途 |
-|------|------|
-| `backend/main.py` | uvicorn 入口（`uvicorn main:app`，仅启动） |
-| `backend/app/main.py` | FastAPI app 实例 + CORS + 路由注册 |
-| `backend/app/config.py` | 配置：CORS 来源 / 阈值 / `load_analyzer_keys()` |
-| `backend/app/schemas.py` | Pydantic 模型（Message / Tag / AnalyzeRequest 等） |
-| `backend/app/services/heuristic.py` | Jaccard 启发式分析（`analyze()`） |
-| `backend/app/services/analyzer.py` | 流式自评（prompt 构造 / 解析 / `stream_self_eval()`） |
-| `backend/app/api/deps.py` | 依赖注入：`get_llm_client()`（可测试替换） |
-| `backend/app/api/health.py` | `GET /api/health` |
-| `backend/app/api/analyze.py` | `POST /api/analyze` + `POST /api/analyze/stream` |
-| `backend/requirements.txt` | 运行时依赖（fastapi、uvicorn、pydantic、httpx） |
-| `backend/requirements-dev.txt` | 开发依赖（pytest、pytest-asyncio、respx） |
-| `backend/pytest.ini` | pytest 配置（asyncio_mode=auto） |
-| `backend/.env.example` | 后端环境变量示例 |
-| `backend/tests/` | pytest 测试（conftest + 5 个测试模块：heuristic / analyzer / config / api / api_stream，共 63 用例） |
-| `index.html` | 单 HTML 原型（作为演示 demo，与 React 主版本功能同步） |
-| `.gitignore` | Git 忽略规则 |
-| `.trae/specs/` | Spec 驱动开发的规格文档（spec.md / tasks.md / checklist.md） |
+1. `npm run typecheck` 通过（前端，如涉及前端改动）
+2. `npm run test:run` 全部通过（前端，如涉及前端改动）
+3. `npm run build` 成功（前端，如涉及构建改动）
+4. `pytest` 通过（后端，如涉及后端改动）
+5. 已获用户确认（**禁止未经确认的提交**）
 
-## 4. 开发工作流
+等价快捷方式：`make verify` 一键全检通过。
 
-1. **启动前端**：`cd frontend && npm install && npm run dev` → [http://localhost:5173](http://localhost:5173)
-2. **启动后端**（可选，共识/分歧真实分析）：`cd backend && pip install -r requirements.txt && uvicorn main:app --reload --port 8000`
-3. **后端测试**：`cd backend && pip install -r requirements-dev.txt && pytest`
-4. **前端测试**：`cd frontend && npm run test:run`（vitest 一次性运行所有用例；`npm test` 进入 watch 模式）
-5. **类型检查**：`cd frontend && npm run typecheck`（提交前必须通过）
-6. **构建验证**：`cd frontend && npm run build`（tsc + vite 打包，产物在 `frontend/dist/`）
-
-## 5. Git 提交规范
+## 7. Git 提交规范
 
 - commit message 格式：`<type>: <描述>`
 - type 可选：`feat` / `fix` / `style` / `refactor` / `docs` / `chore`
