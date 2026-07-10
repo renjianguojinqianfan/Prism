@@ -36,12 +36,14 @@ make verify
 
 ## 3. 目录结构（概要）
 
-- `frontend/` — React+TS 前端主版本（日常开发目录）
-- `backend/` — FastAPI 后端（分层：`app/main` + `app/services` + `app/api` + `tests`）
-- `index.html` — 单 HTML 原型（演示 demo，**禁止删除**）
+- `frontend/` - React+TS 前端主版本（日常开发目录）
+- `backend/` - FastAPI 后端（分层：`app/main` + `app/services` + `app/api` + `tests`）
+- `index.html` - 单 HTML 原型（演示 demo，**禁止删除**）
 - `docs/context.md` - 深层上下文（架构、约定）
 - `Makefile` - 质量门禁命令
+- `.github/` - CI/CD 配置（GitHub Actions workflows + Dependabot）
 - `.trae/specs/` - Spec 驱动开发的规格文档
+- `.trae/documents/` - 发版流程等规划文档
 
 ## 4. 关键约定
 

@@ -132,3 +132,13 @@ npm run build         # tsc -b && vite build，产物在 frontend/dist/
 - 每条 AI 发言后即时落定「共识 💡 / 分歧 ⚡ / 中立 ·」标签（带「· {analyzer} 自评」后缀）
 - 后端控制台可见 `POST /api/analyze` 200 日志（模拟模式也调用，作为 Jaccard 回退）
 - 讨论结束「讨论结束」系统消息出现后，已有标签不被覆盖
+
+### CI/CD
+
+仓库已配置以下自动化流水线：
+
+- **GitHub Actions CI**（`.github/workflows/ci.yml`）：push / PR 时自动运行前后端测试
+- **CodeQL 代码安全扫描**（`.github/workflows/codeql.yml`）：覆盖 TypeScript + Python，push / PR 时触发
+- **Dependabot**（`.github/dependabot.yml`）：三生态（npm / pip / github-actions）每周检查依赖更新，自动创建升级 PR（忽略 major 版本）
+
+发版流程参见 `.trae/documents/release-workflow.md`。

@@ -49,3 +49,31 @@
 - `GET /api/health` - 健康检查
 - `POST /api/analyze` - Jaccard 同步回退分析
 - `POST /api/analyze/stream` - 发言者自评 SSE 流式分析
+
+## 3. CI/CD 架构
+
+### 3.1 GitHub Actions
+
+- **CI**（`.github/workflows/ci.yml`）：push / PR 到 main 时触发，运行前端（typecheck + test）和后端（pytest），权限最小化 `permissions: contents: read`
+- **CodeQL**（`.github/workflows/codeql.yml`）：push / PR 到 main 时触发，扫描 TypeScript + Python 代码漏洞
+
+### 3.2 Dependabot
+
+- **配置文件**：`.github/dependabot.yml`
+- **三生态**：npm（`/frontend`）/ pip（`/backend`）/ github-actions（`/`）
+- **策略**：每周一检查，最多 5 个 PR，忽略 major 版本升级，commit 前缀 `chore`
+
+### 3.3 质量门禁
+
+- **Makefile** `verify` 目标：test:run + typecheck + build + pytest
+- **pre-commit hook**：提交前自动运行 `make verify`
+- **commit-msg hook**：校验 commit message 格式（`<type>: <描述>`）
+
+### 3.4 发版流程
+
+发版相关文档位于 `.trae/documents/`：
+
+- `release-workflow.md` - 完整发版流程
+- `release-doc-checklist.md` - 文档检查清单
+- `release-e2e-test.md` - 端到端测试方法
+- `release-checklist-record.md` - 发版检查记录模板
