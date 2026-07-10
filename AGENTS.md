@@ -43,8 +43,6 @@ make verify
 - `Makefile` - 质量门禁命令
 - `.trae/specs/` - Spec 驱动开发的规格文档
 
-**架构说明见 [docs/context.md](docs/context.md)。**
-
 ## 4. 关键约定
 
 ### 必须遵守
@@ -58,17 +56,13 @@ make verify
 - **后端/前端阈值同步**：Jaccard 回退路径的阈值（当前 HIGH=0.14, LOW=0.11）前后端必须保持一致，改一处必须改另一处（见 `frontend/src/services/analyzer.ts` 与 `backend/app/config.py`）。注意：主路径为「发言者自评 LLM」，Jaccard 仅在自评失败时回退
 
 ### 禁止事项
-- 禁止擅自更改深色赛博朋克 UI 风格
-- 禁止在代码中硬编码 API Key
 - 禁止提交未经用户确认的代码
-- 禁止删除根目录 `index.html`（早期原型，作为演示 demo 保留）
 - 禁止在前端引入除 marked 之外的大型依赖（如 UI 组件库、图表库）除非用户明确要求
 
 ## 5. 行为边界
 
 - ✅ **允许**：修改 `frontend/src/` 与 `backend/app/` 下代码；运行测试与类型检查；编写单元测试
-- ⚠️ **需确认**：改代码前必须先说明计划并获用户确认；提交代码前必须获用户确认；修改 `package.json` / `requirements.txt` 依赖；修改阈值（前后端必须同步）
-- 🚫 **禁止**：见第 4 章"禁止事项"全部条目
+- ⚠️ **需确认**：修改 `package.json` / `requirements.txt` 依赖
 
 ## 6. 完成定义（Definition of Done）
 
@@ -101,4 +95,3 @@ Git hooks 自动执行质量门禁，无需手动维护：
 - 描述用中文，一句话说清改动
 - 示例：`feat: 迁移至 React+TypeScript`
 - **分批次多次小步提交**：每个逻辑独立的小改动单独一个 commit，不要把多个不相关的修复堆在一个 commit 里
-- **禁止提交未经用户确认的代码**
