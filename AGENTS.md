@@ -37,7 +37,7 @@ make verify
 ## 3. 目录结构（概要）
 
 - `frontend/` - React+TS 前端主版本（日常开发目录）
-- `backend/` - FastAPI 后端（分层：`app/main` + `app/services` + `app/api` + `tests`）
+- `backend/` - FastAPI 后端（分层：`app/main` + `app/api` + `app/services` + `app/config` + `app/schemas` + `tests`）
 - `index.html` - 单 HTML 原型（演示 demo，**禁止删除**）
 - `docs/context.md` - 深层上下文（架构、约定）
 - `Makefile` - 质量门禁命令

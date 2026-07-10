@@ -36,6 +36,9 @@ jobs:
       - name: Test
         run: npm run test:run
 
+      - name: Build
+        run: npm run build
+
   backend:
     name: Backend (Python 3.11)
     runs-on: ubuntu-latest
