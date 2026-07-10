@@ -34,8 +34,8 @@
 - 受影响 specs：本 Spec 为项目唯一 spec
 - 受影响代码：
   - `frontend/src/`（React+TS 全量迁移产物，含 store/services/utils/components）
-  - `main.py`、`requirements.txt`、`.env.example`（后端骨架 + CORS 收紧）
-  - `readme.md`、`agents.md`（文档同步）
+  - `backend/main.py`、`backend/requirements.txt`、`backend/.env.example`（后端骨架 + CORS 收紧）
+  - `README.md`、`AGENTS.md`（文档同步）
   - `index.html`（早期原型，保留对照，不再演进）
 
 ## ADDED Requirements
@@ -143,7 +143,7 @@
 系统 SHALL 在讨论结束后提供 D3 力导向图视图，将发言关系可视化。
 
 #### Scenario: 图谱渲染
-- **WHEN** 讨论结束且 `analyzeMessages()` 产出 tags
+- **WHEN** 讨论结束且 `streamAnalyzeMessage()` 产出 tags
 - **THEN** 渲染力导向图：节点 = 每条 AI 发言（颜色按 label），边 = 两两 Jaccard 相似度（边宽/透明度映射 score），可拖拽、可 hover 高亮邻接节点
 
 #### Scenario: 图谱与列表联动
@@ -168,4 +168,4 @@
 
 ### Requirement: 固定 Mock 标签策略（第一条共识/最后一条分歧）
 **Reason**：与产品核心价值"真实多视角碰撞"不符，仅作为初版占位
-**Migration**：CSS 类 `.msg-tag.consensus/.divergence/.neutral` 保留，逻辑层由 `analyzeMessages()` 统一接管
+**Migration**：CSS 类 `.msg-tag.consensus/.divergence/.neutral` 保留，逻辑层由 `streamAnalyzeMessage()` 统一接管

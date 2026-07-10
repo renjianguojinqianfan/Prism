@@ -2,7 +2,7 @@
 
 > 标记说明：`[x]` 已验收 / `[ ]` 待验收；`(P1)` 为高优先级规划项
 
-## 后端（main.py / requirements.txt / .env.example）
+## 后端（backend/main.py / backend/requirements.txt / backend/.env.example）
 - [x] `requirements.txt` 含 fastapi、uvicorn、pydantic 且可被 `pip install` 解析
 - [x] `GET /api/health` 返回 `{"status":"ok"}`
 - [x] CORS 通过 `PRISM_CORS_ORIGINS` 环境变量配置白名单，默认含本地 5173/4173 端口，不再使用 `*`
@@ -39,7 +39,7 @@
 - [x] `generateSimReply()` 引用上一条 AI 发言前 60 字（去空白）
 - [x] 按 `(round - 1) % pool.length` 确定性取模板，同话题可复现
 - [x] 首轮首位（无 prevAi）不插入引用片段
-- [x] 四个预设模型（deepseek/kimi/glm/qwen）各有 3 个模板
+- [x] 5 个快速添加模板（DeepSeek/Kimi/GLM/通义千问/Mimo），用户点击 + 按钮添加
 
 ## Markdown 渲染与 XSS 防护（utils/markdown.ts + MessageBubble.tsx）
 - [x] marked v12 封装，`walkTokens` 对 `type === 'html'` 的 token 调用 `escapeHtml`
@@ -57,14 +57,14 @@
 - [x] localStorage 键从 `aiRoundtable_models` 迁移到 `prism_models`，旧键数据自动迁移
 - [x] 旧键保留不删（避免数据丢失争议）
 
-## 文档（readme.md / agents.md / .env.example）
-- [x] `readme.md` 功能列表反映 React+TS 现状（无"规划中"过期表述）
-- [x] `readme.md` 命令参考表与 `package.json` scripts 一致
-- [x] `readme.md` 环境变量表 `PRISM_CORS_ORIGINS` 描述与代码一致（非"未读取此变量"）
-- [x] `readme.md` API 参考与 `main.py` 路由/Pydantic 模型一致
-- [x] `agents.md` 文件清单含 `frontend/src/` 全部组件
-- [x] `agents.md` 标注前后端阈值同步约束
-- [x] `.env.example`（根目录）`PRISM_CORS_ORIGINS` 示例值含 5173/4173 端口
+## 文档（README.md / AGENTS.md / backend/.env.example）
+- [x] `README.md` 功能列表反映 React+TS 现状（无"规划中"过期表述）
+- [x] `README.md` 命令参考表与 `package.json` scripts 一致
+- [x] `README.md` 环境变量表 `PRISM_CORS_ORIGINS` 描述与代码一致（非"未读取此变量"）
+- [x] `README.md` API 参考与 `backend/app/api/` 路由/Pydantic 模型一致
+- [x] `docs/context.md` 架构说明含 `frontend/src/` 全部组件
+- [x] `AGENTS.md` 标注前后端阈值同步约束
+- [x] `backend/.env.example` `PRISM_CORS_ORIGINS` 示例值含 5173/4173 端口
 - [x] `.env.example`（frontend）含 `VITE_ANALYZE_ENDPOINT`
 
 ## 端到端
