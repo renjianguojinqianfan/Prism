@@ -643,7 +643,7 @@ function renderMessage(msg) {
                 </div>
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-1">
-                        <span class="text-xs font-600" style="color:${modelColor};">${modelName}</span>
+                        <span class="text-xs font-600" style="color:${modelColor};">${escapeHtml(modelName)}</span>
                         <span class="text-[10px]" style="color:var(--muted);">${msg.round ? `第${msg.round}轮` : ''}</span>
                     </div>
                     <div class="px-4 py-2.5 rounded-2xl rounded-tl-md text-sm leading-relaxed" style="background:var(--card);border:1px solid var(--border);">
