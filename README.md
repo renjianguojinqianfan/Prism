@@ -101,7 +101,7 @@ pytest -q             # 安静模式
 
 覆盖范围：`heuristic`（Jaccard 启发式）/ `analyzer`（流式自评 prompt 构造 + SSE 解析）/ `config`（环境变量解析）/ `api`（端点集成）/ `api_stream`（SSE 端到端，使用 respx 全局拦截 httpx）。
 
-**前端（vitest，75 用例 / 7 文件）**：
+**前端（vitest，82 用例 / 7 文件）**：
 
 ```bash
 cd frontend

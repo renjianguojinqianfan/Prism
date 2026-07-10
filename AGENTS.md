@@ -31,7 +31,7 @@ pip install -r requirements-dev.txt && pytest
 # 一键质量门禁（推荐提交前运行）
 make verify
 # Windows 无 make 时的等价命令：
-# cd frontend && npm run test:run && npm run typecheck && cd ../backend && pytest
+# cd frontend && npm run test:run && npm run typecheck && npm run build && cd ../backend && pytest
 ```
 
 ## 3. 目录结构（概要）

@@ -1,7 +1,7 @@
 .PHONY: verify test-frontend typecheck-frontend test-backend build-frontend dev-frontend dev-backend
 
 # 一键质量门禁（推荐提交前运行）
-verify: test-frontend typecheck-frontend test-backend
+verify: test-frontend typecheck-frontend build-frontend test-backend
 	@echo "✔ 验证通过"
 
 # 前端测试
@@ -12,7 +12,7 @@ test-frontend:
 typecheck-frontend:
 	cd frontend && npm run typecheck
 
-# 前端构建（可选，发布前运行）
+# 前端构建（含于 verify 质量门禁）
 build-frontend:
 	cd frontend && npm run build
 

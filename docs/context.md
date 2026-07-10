@@ -16,6 +16,7 @@
 
 ### 1.2 后端分层
 
+- `main.py` - 后端入口（re-export `app.main:app` 供 `uvicorn main:app` 加载）
 - `app/main.py` - FastAPI app 实例 + CORS + 路由注册
 - `app/api/` - 路由层（`health.py` 健康检查 / `analyze.py` 分析端点 / `deps.py` 依赖注入）
 - `app/services/` - 业务层（`heuristic.py` Jaccard 启发式 / `analyzer.py` 流式自评）
