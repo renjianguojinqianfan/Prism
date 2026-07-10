@@ -1,5 +1,11 @@
 # Prism 真实共识/分歧分析改造方案
 
+> **历史文档**：以下内容反映创建时（2026-06-30）的设计。后续实施中有变更：
+> - API Key 结构已从 `{"model":"key"}` 变更为 `{"model":{"endpoint":url,"key":apiKey}}`（C1 修复）
+> - 预设模型已从 4 个改为 5 个快速添加模板（新增 GLM）
+> - 后端已从根目录 `main.py` 重构为 `backend/` 分层架构
+> - 当前实现以 AGENTS.md 和 docs/context.md 为准
+
 > change-id: `prism-real-consensus-analysis`
 > 创建时间：2026-06-30
 > 关联 spec：`e:\code\Prism\.trae\specs\add-real-consensus-analysis\spec.md`

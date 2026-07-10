@@ -70,7 +70,7 @@ npm run dev
 |------|------|------|
 | `PRISM_PORT` | 否 | 后端监听端口，默认 `8000` |
 | `PRISM_CORS_ORIGINS` | 否 | 允许的 CORS 来源列表（逗号分隔） |
-| `PRISM_ANALYZER_API_KEYS` | 否 | 发言者自评用配置池（JSON 字符串，按 model 名匹配，结构 `{"model":{"endpoint":url,"key":apiKey}}`）。endpoint 与 Key 都由后端统一管理，前端只传 model 名，杜绝 SSRF 与 Key 泄漏。不配则自动走 Jaccard 回退路径 |
+| `PRISM_ANALYZER_API_KEYS` | 否 | 发言者自评用配置池（JSON 字符串，按 model 名匹配，结构详见 AGENTS.md）。endpoint 与 Key 都由后端统一管理，前端只传 model 名，杜绝 SSRF 与 Key 泄漏。不配则自动走 Jaccard 回退路径 |
 
 ### 启动命令
 
