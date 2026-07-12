@@ -56,7 +56,7 @@ export type Action =
   | { type: 'ADD_TOAST'; toast: ToastItem }
   | { type: 'REMOVE_TOAST'; id: string }
 
-function loadModels(): ModelConfig[] {
+export function loadModels(): ModelConfig[] {
   let saved = localStorage.getItem(STORAGE_KEY)
   if (!saved) {
     const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
