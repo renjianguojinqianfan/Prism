@@ -538,7 +538,7 @@ function renderModelCheckboxes() {
                 ${discussionState.active ? 'disabled' : ''}
                 onchange="onModelCheckboxChange('${m.id}', this.checked)"
                 class="accent-[var(--accent)]">
-            <span class="text-[11px]" style="color:${m.color};"><i class="fas ${m.icon} mr-1"></i>${m.name}</span>
+            <span class="text-[11px]" style="color:${m.color};"><i class="fas ${m.icon} mr-1"></i>${escapeHtml(m.name)}</span>
         </label>
     `).join('');
 }
@@ -564,7 +564,7 @@ function renderRoleBar() {
             <div class="relative w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style="background:${m.color}20;color:${m.color};">
                 <i class="fas ${m.icon} text-[10px]"></i>
             </div>
-            <span class="text-xs font-500 whitespace-nowrap" style="color:var(--fg);">${m.name}</span>
+            <span class="text-xs font-500 whitespace-nowrap" style="color:var(--fg);">${escapeHtml(m.name)}</span>
             <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:${m.apiKey ? m.color : 'var(--muted)'};"></span>
         </div>
     `).join('');
@@ -1090,7 +1090,7 @@ function applySingleTag(msgId, label, evidence, analyzer) {
     const cls = ['consensus', 'divergence', 'neutral'].includes(label) ? label : 'neutral';
     const TEXT = { consensus: '共识 💡', divergence: '分歧 ⚡', neutral: '中立 ·' };
     const text = TEXT[cls];
-    const analyzerText = analyzer ? `<span class="text-[9px] ml-1 opacity-60">· ${analyzer}自评</span>` : '';
+    const analyzerText = analyzer ? `<span class="text-[9px] ml-1 opacity-60">· ${escapeHtml(analyzer)}自评</span>` : '';
     slot.innerHTML = `<span class="msg-tag ${cls}" data-tag-type="${cls}" title="${(evidence || '').replace(/"/g, '&quot;')}">${text}${analyzerText}</span>`;
 }
 
@@ -1183,7 +1183,7 @@ function renderModelConfigs() {
                     <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background:${m.color}20;color:${m.color};">
                         <i class="fas ${m.icon} text-xs"></i>
                     </div>
-                    <span class="text-sm font-600">${m.name}</span>
+                    <span class="text-sm font-600">${escapeHtml(m.name)}</span>
                     ${m.apiKey ? '<span class="text-[9px] px-1.5 py-0.5 rounded-full" style="background:#10B98120;color:#10B981;">已配置</span>' : '<span class="text-[9px] px-1.5 py-0.5 rounded-full" style="background:var(--accent-dim);color:var(--accent);">未配置</span>'}
                 </div>
                 <div class="flex items-center gap-2">
