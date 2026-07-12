@@ -97,10 +97,10 @@ describe('streamChat', () => {
 
   it('正常流累积 delta 并回调', async () => {
     const chunks = [
-      'data: {"choices":[{"delta":{"content":"a"}}]}\n',
-      'data: {"choices":[{"delta":{"content":"b"}}]}\n',
-      'data: {"choices":[{"delta":{"content":"c"}}]}\n',
-      'data: [DONE]\n'
+      'data: {"choices":[{"delta":{"content":"a"}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"b"}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"c"}}]}\n\n',
+      'data: [DONE]\n\n'
     ]
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(makeSSEStream(chunks), { status: 200 })
@@ -113,7 +113,7 @@ describe('streamChat', () => {
 
   it('跨 buffer 边界拼接不丢失不重复', async () => {
     // 把单条 data 行切成两个 chunk，验证 buffer 拼接
-    const line = 'data: {"choices":[{"delta":{"content":"x"}}]}\n'
+    const line = 'data: {"choices":[{"delta":{"content":"x"}}]}\n\n'
     const chunks = [line.slice(0, 20), line.slice(20)]
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(makeSSEStream(chunks), { status: 200 })
@@ -151,8 +151,8 @@ describe('streamChat', () => {
     const chunks = [
       ': comment line\n',
       '\n',
-      'data: {"choices":[{"delta":{"content":"hi"}}]}\n',
-      'data: [DONE]\n'
+      'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+      'data: [DONE]\n\n'
     ]
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(makeSSEStream(chunks), { status: 200 })
@@ -165,8 +165,8 @@ describe('streamChat', () => {
 
   it('单行 JSON 解析失败静默跳过', async () => {
     const chunks = [
-      'data: not-json\n',
-      'data: {"choices":[{"delta":{"content":"ok"}}]}\n'
+      'data: not-json\n\n',
+      'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n'
     ]
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(makeSSEStream(chunks), { status: 200 })
@@ -179,7 +179,7 @@ describe('streamChat', () => {
 
   it('abort 信号透传给 fetch', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(makeSSEStream(['data: [DONE]\n']), { status: 200 })
+      new Response(makeSSEStream(['data: [DONE]\n\n']), { status: 200 })
     )
     vi.stubGlobal('fetch', fetchMock)
     const ac = new AbortController()
@@ -187,5 +187,12 @@ describe('streamChat', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const opts = fetchMock.mock.calls[0][1] as RequestInit
     expect(opts.signal).toBe(ac.signal)
+  })
+
+  it('网络错误直接抛出', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')))
+    await expect(
+      streamChat(baseModel, [], new AbortController().signal, vi.fn())
+    ).rejects.toThrow('fetch failed')
   })
 })

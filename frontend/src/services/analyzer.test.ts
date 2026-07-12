@@ -202,8 +202,8 @@ describe('streamAnalysis', () => {
 
   it('正常流返回 final 标签', async () => {
     const chunks = [
-      'data: {"type":"delta","content":"分析中"}\n',
-      'data: {"type":"final","label":"consensus","evidence":"高重合"}\n'
+      'data: {"type":"delta","content":"分析中"}\n\n',
+      'data: {"type":"final","label":"consensus","evidence":"高重合"}\n\n'
     ]
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(makeSSEStream(chunks), { status: 200 })
@@ -215,7 +215,7 @@ describe('streamAnalysis', () => {
   })
 
   it('fallback 事件返回 null', async () => {
-    const chunks = ['data: {"type":"fallback","reason":"no_key"}\n']
+    const chunks = ['data: {"type":"fallback","reason":"no_key"}\n\n']
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(makeSSEStream(chunks), { status: 200 })
     ))
@@ -240,7 +240,7 @@ describe('streamAnalysis', () => {
   })
 
   it('跨 buffer 边界拼接仍解析 final', async () => {
-    const line = 'data: {"type":"final","label":"divergence","evidence":"低重合"}\n'
+    const line = 'data: {"type":"final","label":"divergence","evidence":"低重合"}\n\n'
     const chunks = [line.slice(0, 30), line.slice(30)]
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(makeSSEStream(chunks), { status: 200 })
@@ -251,8 +251,8 @@ describe('streamAnalysis', () => {
 
   it('畸形 data 行跳过仍返回 final', async () => {
     const chunks = [
-      'data: not-json\n',
-      'data: {"type":"final","label":"neutral","evidence":"中性"}\n'
+      'data: not-json\n\n',
+      'data: {"type":"final","label":"neutral","evidence":"中性"}\n\n'
     ]
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(makeSSEStream(chunks), { status: 200 })
@@ -262,7 +262,7 @@ describe('streamAnalysis', () => {
   })
 
   it('仅 delta 无 final 返回 null', async () => {
-    const chunks = ['data: {"type":"delta","content":"思考"}\n']
+    const chunks = ['data: {"type":"delta","content":"思考"}\n\n']
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(makeSSEStream(chunks), { status: 200 })
     ))
