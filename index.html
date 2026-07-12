@@ -202,7 +202,7 @@
         .msg-content h3 { font-size: 1em; }
         .msg-content a { color: var(--accent); text-decoration: underline; }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 </head>
 <body class="bg-animated">
 
@@ -1316,11 +1316,13 @@ function exportDiscussion() {
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
-    return div.innerHTML;
+    return div.innerHTML
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 // Markdown 渲染：marked 可用时解析，否则回退 escapeHtml
-// 与 React 版一致：通过 walkTokens 转义 HTML token，防止 XSS
+// 与 React 版一致：walkTokens 转义 HTML token + link/image renderer 协议白名单，防止 XSS
 let _markedXssInit = false;
 function renderMarkdown(text) {
     if (typeof marked !== 'undefined' && marked.parse) {
@@ -1329,6 +1331,18 @@ function renderMarkdown(text) {
                 walkTokens(token) {
                     if (token.type === 'html') {
                         token.text = escapeHtml(token.text);
+                    }
+                },
+                renderer: {
+                    link(href, title, text) {
+                        if (href && !/^(https?:|mailto:|tel:)/i.test(href)) href = '';
+                        const titleAttr = title ? ` title="${title}"` : '';
+                        return `<a href="${escapeHtml(href)}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
+                    },
+                    image(href, title, text) {
+                        if (href && !/^https?:/i.test(href)) return '';
+                        const titleAttr = title ? ` title="${title}"` : '';
+                        return `<img src="${escapeHtml(href)}" alt="${text}"${titleAttr} />`;
                     }
                 }
             });
