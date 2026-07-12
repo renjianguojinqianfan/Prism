@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { buildAPIHistory } from './api'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { buildAPIHistory, streamChat } from './api'
 import type { Message, ModelConfig } from '../store/types'
 
 const baseModel: ModelConfig = {
@@ -79,5 +79,113 @@ describe('buildAPIHistory', () => {
     // 只 system + final user
     expect(r).toHaveLength(2)
     expect(r.find(m => m.content.includes('系统'))).toBeFalsy()
+  })
+})
+
+// ========== streamChat 流式调用层 ==========
+function makeSSEStream(chunks: string[]): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      chunks.forEach(c => controller.enqueue(new TextEncoder().encode(c)))
+      controller.close()
+    }
+  })
+}
+
+describe('streamChat', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('正常流累积 delta 并回调', async () => {
+    const chunks = [
+      'data: {"choices":[{"delta":{"content":"a"}}]}\n',
+      'data: {"choices":[{"delta":{"content":"b"}}]}\n',
+      'data: {"choices":[{"delta":{"content":"c"}}]}\n',
+      'data: [DONE]\n'
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(makeSSEStream(chunks), { status: 200 })
+    ))
+    const onDelta = vi.fn()
+    const result = await streamChat(baseModel, [], new AbortController().signal, onDelta)
+    expect(onDelta).toHaveBeenCalledTimes(3)
+    expect(result).toBe('abc')
+  })
+
+  it('跨 buffer 边界拼接不丢失不重复', async () => {
+    // 把单条 data 行切成两个 chunk，验证 buffer 拼接
+    const line = 'data: {"choices":[{"delta":{"content":"x"}}]}\n'
+    const chunks = [line.slice(0, 20), line.slice(20)]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(makeSSEStream(chunks), { status: 200 })
+    ))
+    const onDelta = vi.fn()
+    const result = await streamChat(baseModel, [], new AbortController().signal, onDelta)
+    expect(onDelta).toHaveBeenCalledTimes(1)
+    expect(result).toBe('x')
+  })
+
+  it('非 200 抛错含状态码与截断文本', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response('server boom', { status: 500 })
+    ))
+    let err: Error | null = null
+    try {
+      await streamChat(baseModel, [], new AbortController().signal, vi.fn())
+    } catch (e) {
+      err = e as Error
+    }
+    expect(err?.message).toContain('500')
+    expect(err?.message).toContain('server boom')
+  })
+
+  it('无响应体抛错', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      { ok: true, status: 200, body: null, text: async () => '' }
+    ))
+    await expect(
+      streamChat(baseModel, [], new AbortController().signal, vi.fn())
+    ).rejects.toThrow('API响应无响应体')
+  })
+
+  it('忽略非 data 行与 [DONE]', async () => {
+    const chunks = [
+      ': comment line\n',
+      '\n',
+      'data: {"choices":[{"delta":{"content":"hi"}}]}\n',
+      'data: [DONE]\n'
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(makeSSEStream(chunks), { status: 200 })
+    ))
+    const onDelta = vi.fn()
+    const result = await streamChat(baseModel, [], new AbortController().signal, onDelta)
+    expect(onDelta).toHaveBeenCalledTimes(1)
+    expect(result).toBe('hi')
+  })
+
+  it('单行 JSON 解析失败静默跳过', async () => {
+    const chunks = [
+      'data: not-json\n',
+      'data: {"choices":[{"delta":{"content":"ok"}}]}\n'
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(makeSSEStream(chunks), { status: 200 })
+    ))
+    const onDelta = vi.fn()
+    const result = await streamChat(baseModel, [], new AbortController().signal, onDelta)
+    expect(onDelta).toHaveBeenCalledTimes(1)
+    expect(result).toBe('ok')
+  })
+
+  it('abort 信号透传给 fetch', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(makeSSEStream(['data: [DONE]\n']), { status: 200 })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const ac = new AbortController()
+    await streamChat(baseModel, [], ac.signal, vi.fn())
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const opts = fetchMock.mock.calls[0][1] as RequestInit
+    expect(opts.signal).toBe(ac.signal)
   })
 })
