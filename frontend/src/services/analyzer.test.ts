@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   _isCjk,
   tokenize,
   jaccard,
-  localHeuristicAnalyze
+  localHeuristicAnalyze,
+  streamAnalysis,
+  fetchAnalysis
 } from './analyzer'
 
 describe('_isCjk', () => {
@@ -172,5 +174,134 @@ describe('localHeuristicAnalyze', () => {
     for (const t of r) {
       expect(['consensus', 'divergence', 'neutral']).toContain(t.label)
     }
+  })
+})
+
+// ========== streamAnalysis / fetchAnalysis 流式与回退调用层 ==========
+function makeSSEStream(chunks: string[]): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      chunks.forEach(c => controller.enqueue(new TextEncoder().encode(c)))
+      controller.close()
+    }
+  })
+}
+
+const streamPayload = {
+  topic: '测试话题',
+  currentMessage: { id: 'm1', modelName: 'A', model: 'test-model', content: '内容' },
+  priorMessages: [] as { id: string; modelName: string; model: string; content: string }[]
+}
+const fetchPayload = {
+  topic: '测试话题',
+  messages: [{ id: 'm1', modelName: 'A', content: '内容' }]
+}
+
+describe('streamAnalysis', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('正常流返回 final 标签', async () => {
+    const chunks = [
+      'data: {"type":"delta","content":"分析中"}\n',
+      'data: {"type":"final","label":"consensus","evidence":"高重合"}\n'
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(makeSSEStream(chunks), { status: 200 })
+    ))
+    const onDelta = vi.fn()
+    const r = await streamAnalysis('/api/analyze/stream', streamPayload, onDelta)
+    expect(r).toEqual({ label: 'consensus', evidence: '高重合' })
+    expect(onDelta).toHaveBeenCalledWith('分析中')
+  })
+
+  it('fallback 事件返回 null', async () => {
+    const chunks = ['data: {"type":"fallback","reason":"no_key"}\n']
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(makeSSEStream(chunks), { status: 200 })
+    ))
+    const r = await streamAnalysis('/api/analyze/stream', streamPayload)
+    expect(r).toBeNull()
+  })
+
+  it('非 200 返回 null', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response('not found', { status: 404 })
+    ))
+    const r = await streamAnalysis('/api/analyze/stream', streamPayload)
+    expect(r).toBeNull()
+  })
+
+  it('无 body 返回 null', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      { ok: true, status: 200, body: null }
+    ))
+    const r = await streamAnalysis('/api/analyze/stream', streamPayload)
+    expect(r).toBeNull()
+  })
+
+  it('跨 buffer 边界拼接仍解析 final', async () => {
+    const line = 'data: {"type":"final","label":"divergence","evidence":"低重合"}\n'
+    const chunks = [line.slice(0, 30), line.slice(30)]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(makeSSEStream(chunks), { status: 200 })
+    ))
+    const r = await streamAnalysis('/api/analyze/stream', streamPayload)
+    expect(r).toEqual({ label: 'divergence', evidence: '低重合' })
+  })
+
+  it('畸形 data 行跳过仍返回 final', async () => {
+    const chunks = [
+      'data: not-json\n',
+      'data: {"type":"final","label":"neutral","evidence":"中性"}\n'
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(makeSSEStream(chunks), { status: 200 })
+    ))
+    const r = await streamAnalysis('/api/analyze/stream', streamPayload)
+    expect(r).toEqual({ label: 'neutral', evidence: '中性' })
+  })
+
+  it('仅 delta 无 final 返回 null', async () => {
+    const chunks = ['data: {"type":"delta","content":"思考"}\n']
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(makeSSEStream(chunks), { status: 200 })
+    ))
+    const r = await streamAnalysis('/api/analyze/stream', streamPayload)
+    expect(r).toBeNull()
+  })
+})
+
+describe('fetchAnalysis', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('ok 含 tags 返回 tags 数组', async () => {
+    const tags = [{ id: 'a', label: 'consensus', score: 0.5, evidence: 'x' }]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ tags }), { status: 200 })
+    ))
+    const r = await fetchAnalysis('/api/analyze', fetchPayload)
+    expect(r).toEqual(tags)
+  })
+
+  it('非 ok 返回 null', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response('err', { status: 500 })
+    ))
+    const r = await fetchAnalysis('/api/analyze', fetchPayload)
+    expect(r).toBeNull()
+  })
+
+  it('body 无 tags 字段返回 null', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({}), { status: 200 })
+    ))
+    const r = await fetchAnalysis('/api/analyze', fetchPayload)
+    expect(r).toBeNull()
+  })
+
+  it('网络异常返回 null 不抛错', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')))
+    const r = await fetchAnalysis('/api/analyze', fetchPayload)
+    expect(r).toBeNull()
   })
 })
