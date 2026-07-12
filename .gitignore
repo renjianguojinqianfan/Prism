@@ -42,3 +42,6 @@ playwright/.cache/
 # Python venv
 .venv/
 venv/
+
+# Private planning docs (not for Git)
+docs/roadmap.md
