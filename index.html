@@ -622,7 +622,7 @@ function renderMessage(msg) {
         html = `
             <div class="msg-enter flex justify-center my-4">
                 <div class="px-4 py-2 rounded-full text-[11px] font-500" style="background:var(--accent-dim);color:var(--accent);">
-                    <i class="fas fa-flag mr-1"></i>${msg.content}
+                    <i class="fas fa-flag mr-1"></i>${escapeHtml(msg.content)}
                 </div>
             </div>`;
     } else if (isUser) {
