@@ -793,7 +793,7 @@ async function generateResponse(model, round, simulate) {
             </div>
             <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-1">
-                    <span class="text-xs font-600" style="color:${modelColor};">${model.name}</span>
+                    <span class="text-xs font-600" style="color:${modelColor};">${escapeHtml(model.name)}</span>
                     <span class="text-[10px]" style="color:var(--muted);">第${round}轮</span>
                     <span class="text-[10px] typing-cursor" style="color:var(--muted);">思考中</span>
                     <span class="ml-auto msg-tag-slot">${initialTag}</span>
@@ -1213,7 +1213,7 @@ function renderModelConfigs() {
                 <div>
                     <label class="text-[10px] font-500 mb-1 block" style="color:var(--muted);">角色设定 (System Prompt)</label>
                     <textarea rows="2" onchange="models[${idx}].systemPrompt=this.value" 
-                        class="w-full px-3 py-1.5 rounded-lg text-xs input-glow border border-[var(--border)] resize-none" style="background:var(--bg);color:var(--fg);">${m.systemPrompt}</textarea>
+                        class="w-full px-3 py-1.5 rounded-lg text-xs input-glow border border-[var(--border)] resize-none" style="background:var(--bg);color:var(--fg);">${escapeHtml(m.systemPrompt)}</textarea>
                 </div>
             </div>
         </div>

@@ -22,7 +22,7 @@ marked.use({
     image(href: string, title: string | null, text: string) {
       if (href && !/^https?:/i.test(href)) return ''
       const titleAttr = title ? ` title="${title}"` : ''
-      return `<img src="${escapeHtml(href)}" alt="${text}"${titleAttr} />`
+      return `<img src="${escapeHtml(href)}" alt="${escapeHtml(text)}"${titleAttr} />`
     }
   }
 })
