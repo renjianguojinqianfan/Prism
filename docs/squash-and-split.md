@@ -137,6 +137,16 @@ f888ba2 feat(analyzer): 实现 directStreamAnalysis 直连模型 API
 2. `git reset --soft accbb80`（accbb80 = 0447464 的父提交）
 3. 按功能模块分组提交（见下）
 
-### 压缩后
+### 压缩后（3 个提交）
 
-按核心实现 / 配置清理 / 文档 三组拆分。
+```
+95b0d0f docs: 更新架构文档并新增压缩拆分流程
+590397d refactor(backend): 删除后端服务并更新构建配置
+a52ef92 feat(analyzer): 分析改前端直连并同步原型
+```
+
+后续追加了 2 个修复提交：
+```
+902ce9a fix: 修复 Review 问题并补充流程文档
+7deaedd ci: 移除后端相关的 Dependabot 和 CodeQL 配置
+```

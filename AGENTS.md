@@ -33,6 +33,7 @@ make verify
 - `frontend/` - React+TS 前端主版本（日常开发目录）
 - `index.html` - 单 HTML 原型（演示 demo，**禁止删除**）
 - `docs/context.md` - 深层上下文（架构、约定）
+- `.githooks/` - Git hooks（commit-msg + pre-commit，通过 `core.hooksPath` 配置）
 - `Makefile` - 质量门禁命令
 - `.github/` - CI/CD 配置（GitHub Actions workflows + Dependabot）
 - `.trae/specs/` - Spec 驱动开发的规格文档
