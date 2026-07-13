@@ -12,15 +12,8 @@ import type { Message, ModelConfig, ToastItem, ToastType } from './types'
 import { STORAGE_KEY, LEGACY_STORAGE_KEY, type QuickTemplate } from '../config/presetModels'
 import { buildAPIHistory, streamChat } from '../services/api'
 import { generateSimReply } from '../services/simulator'
-import { fetchAnalysis, localHeuristicAnalyze, streamAnalysis, type StreamAnalysisPayload } from '../services/analyzer'
+import { directStreamAnalysis, localHeuristicAnalyze, type DirectStreamAnalysisPayload } from '../services/analyzer'
 import { sleep, genId } from '../utils/sleep'
-
-// 流式自评端点（主路径）：发言者自己 LLM 做评估，SSE 流式推回
-const ANALYZE_ENDPOINT =
-  import.meta.env.VITE_ANALYZE_ENDPOINT || 'http://localhost:8000/api/analyze/stream'
-// Jaccard 同步回退端点：流式失败 / 无 Key / 模拟模式时使用
-const ANALYZE_FALLBACK_ENDPOINT =
-  import.meta.env.VITE_ANALYZE_FALLBACK_ENDPOINT || 'http://localhost:8000/api/analyze'
 
 export interface State {
   models: ModelConfig[]
@@ -406,22 +399,20 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
 
       // 模拟模式：跳过 LLM 调用，直接走 Jaccard（与现状一致）
       if (!simulate && model.apiKey) {
-        const payload: StreamAnalysisPayload = {
+        const payload: DirectStreamAnalysisPayload = {
           topic: topicRef.current || '',
           currentMessage: {
             id: currentMsg.id,
             modelName: currentMsg.modelName,
-            model: model.model,
             content: currentMsg.content,
           },
           priorMessages: priorAiMsgs.map(m => ({
             id: m.id,
             modelName: m.modelName,
-            model: '',
             content: m.content,
           })),
         }
-        const finalTag = await streamAnalysis(ANALYZE_ENDPOINT, payload)
+        const finalTag = await directStreamAnalysis(model, payload)
         if (finalTag) {
           updateMessage(currentMsg.id, {
             tag: { label: finalTag.label, evidence: finalTag.evidence, analyzer: currentMsg.modelName }
@@ -431,7 +422,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
         // 流式失败，继续走 Jaccard 回退
       }
 
-      // Jaccard 回退：后端 /api/analyze 同步调用
+      // 前端 Jaccard 回退
       const fallbackPayload = {
         topic: topicRef.current || '',
         messages: [
@@ -439,16 +430,6 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
           { id: currentMsg.id, modelName: currentMsg.modelName, content: currentMsg.content },
         ],
       }
-      const fallbackTags = await fetchAnalysis(ANALYZE_FALLBACK_ENDPOINT, fallbackPayload)
-      if (fallbackTags && fallbackTags.length > 0) {
-        const myTag = fallbackTags[fallbackTags.length - 1]
-        updateMessage(currentMsg.id, {
-          tag: { label: myTag.label, evidence: myTag.evidence, analyzer: '本地启发式' }
-        })
-        return
-      }
-
-      // 最后回退：前端 localHeuristicAnalyze
       const localTags = localHeuristicAnalyze(fallbackPayload.messages)
       if (localTags.length > 0) {
         const myTag = localTags[localTags.length - 1]

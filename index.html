@@ -975,53 +975,99 @@ function resetDiscussion() {
 }
 
 // ========== 共识/分歧分析 ==========
-const ANALYZE_ENDPOINT = 'http://localhost:8000/api/analyze/stream';
-const ANALYZE_FALLBACK_ENDPOINT = 'http://localhost:8000/api/analyze';
 
-async function streamAnalysis(endpoint, payload, onDelta) {
+// 解析 LLM 输出的 JSON，提取 {label, evidence}
+function parseLabelJson(text) {
+    const m = text.match(/\{[^{}]*"label"[^{}]*\}/);
+    if (!m) return null;
+    try {
+        const obj = JSON.parse(m[0]);
+        if (obj.label === 'consensus' || obj.label === 'divergence' || obj.label === 'neutral') {
+            return { label: obj.label, evidence: String(obj.evidence || '') };
+        }
+    } catch { /* 忽略解析错误 */ }
+    return null;
+}
+
+// 构造发言者自评 prompt，前文最多取最近 5 条
+function buildAnalyzerPrompt(topic, priorMessages, currentMessage) {
+    const recent = priorMessages.slice(-5);
+    const priorText = recent.length > 0
+        ? recent.map(m => `${m.modelName}：${m.content}`).join('\n\n')
+        : '（无前文，这是首条发言）';
+    return `你是一个观点分析助手。你刚刚参与了关于「${topic || '未指定话题'}」的讨论，现在需要分析自己刚才的发言与前文其他参与者的发言之间的关系。
+
+前文参与者发言：
+${priorText}
+
+你刚才的发言：
+${currentMessage}
+
+请判断你的发言与前文整体的关系：
+- consensus（共识）：你的观点与前文多数观点方向一致或补充支持
+- divergence（分歧）：你的观点与前文有明显对立、反驳或不同立场
+- neutral（中立）：你的发言是新角度、新信息或方向拓展，无明显共识/分歧
+
+只输出 JSON，不要任何额外文字：
+{"label": "consensus|divergence|neutral", "evidence": "一句话证据，不超过50字"}`;
+}
+
+// 前端直连模型 API 做发言者自评，用 buildAnalyzerPrompt 构造 prompt，
+// 解析 OpenAI SSE delta 累积全文后用 parseLabelJson 解析。失败返回 null。
+async function streamAnalysis(model, payload, onDelta) {
+    const prompt = buildAnalyzerPrompt(payload.topic, payload.priorMessages, payload.currentMessage.content);
     try {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 30000);
-        const resp = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-            signal: ctrl.signal,
-        });
-        clearTimeout(timer);
-        if (!resp.ok || !resp.body) return null;
+        try {
+            const response = await fetch(model.endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${model.apiKey}`
+                },
+                body: JSON.stringify({
+                    model: model.model,
+                    messages: [{ role: 'user', content: prompt }],
+                    stream: true,
+                    temperature: 0.3,
+                }),
+                signal: ctrl.signal
+            });
 
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let final = null;
+            if (!response.ok || !response.body) return null;
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed.startsWith('data: ')) continue;
-                const data = trimmed.slice(6);
-                let evt;
-                try {
-                    evt = JSON.parse(data);
-                } catch {
-                    continue;
-                }
-                if (evt.type === 'delta' && evt.content && onDelta) {
-                    onDelta(evt.content);
-                } else if (evt.type === 'final' && evt.label) {
-                    final = { label: evt.label, evidence: evt.evidence || '' };
-                } else if (evt.type === 'fallback') {
-                    return null;
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let fullContent = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed.startsWith('data: ')) continue;
+                    const data = trimmed.slice(6);
+                    if (data === '[DONE]') continue;
+                    try {
+                        const json = JSON.parse(data);
+                        const delta = json.choices?.[0]?.delta?.content || '';
+                        if (delta) {
+                            fullContent += delta;
+                            if (onDelta) onDelta(delta);
+                        }
+                    } catch { /* 忽略解析错误 */ }
                 }
             }
+
+            return parseLabelJson(fullContent);
+        } finally {
+            clearTimeout(timer);
         }
-        return final;
     } catch {
         return null;
     }
@@ -1040,44 +1086,25 @@ async function analyzeSingleMessage(msgId, model, content, round) {
             currentMessage: {
                 id: msgId,
                 modelName: model.name,
-                model: model.model,
                 content: content,
             },
-            priorMessages: priorMsgs.slice(-5).map(m => ({
+            priorMessages: priorMsgs.map(m => ({
                 id: m.id,
                 modelName: m.modelName,
-                model: models.find(mo => mo.id === m.modelId)?.model || '',
                 content: m.content,
             })),
         };
-        const finalTag = await streamAnalysis(ANALYZE_ENDPOINT, payload);
+        const finalTag = await streamAnalysis(model, payload);
         if (finalTag) {
             applySingleTag(msgId, finalTag.label, finalTag.evidence, model.name);
             return;
         }
     }
 
+    // 回退：前端本地启发式分析
     const allItems = priorMsgs.concat([{ id: msgId, modelName: model.name, content }]);
-    let tags = null;
-    try {
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 4000);
-        const resp = await fetch(ANALYZE_FALLBACK_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ topic: discussionState.topic || '', messages: allItems }),
-            signal: ctrl.signal
-        });
-        clearTimeout(timer);
-        if (resp.ok) {
-            const data = await resp.json();
-            if (Array.isArray(data?.tags)) tags = data.tags;
-        }
-    } catch (e) { /* 网络错误，回退本地 */ }
-    if (!tags) {
-        tags = localHeuristicAnalyze(allItems);
-        showToast('已使用本地分析（后端不可用或模拟模式）', 'info');
-    }
+    const tags = localHeuristicAnalyze(allItems);
+    showToast('已使用本地分析（后端不可用或模拟模式）', 'info');
     const myTag = tags.find(t => t.id === msgId);
     if (myTag) {
         applySingleTag(msgId, myTag.label, myTag.evidence, '本地启发式');

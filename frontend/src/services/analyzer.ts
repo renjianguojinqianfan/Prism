@@ -114,85 +114,115 @@ export function localHeuristicAnalyze(items: AnalyzeItem[]): AnalysisTag[] {
   })
 }
 
-export interface AnalyzePayload {
-  topic: string
-  messages: AnalyzeItem[]
-}
+// ---------- 发言者自评 prompt 构造与解析（从后端迁移） ----------
 
-export async function fetchAnalysis(
-  endpoint: string,
-  payload: AnalyzePayload,
-  timeoutMs = 4000
-): Promise<AnalysisTag[] | null> {
-  try {
-    const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs)
-    try {
-      const resp = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: ctrl.signal
-      })
-      if (resp.ok) {
-        const data = await resp.json()
-        if (Array.isArray(data?.tags)) return data.tags as AnalysisTag[]
-      }
-      return null
-    } finally {
-      clearTimeout(timer)
-    }
-  } catch {
-    return null
-  }
-}
-
-// ---------- 流式自评分析 ----------
-
-export interface StreamAnalyzerMessage {
+export interface AnalyzerPromptMessage {
   id: string
   modelName: string
-  model: string
   content: string
 }
 
-export interface StreamAnalysisPayload {
-  topic: string
-  currentMessage: StreamAnalyzerMessage
-  priorMessages: StreamAnalyzerMessage[]
+function formatAnalyzerPrompt(topic: string, priorMessagesText: string, yourMessage: string): string {
+  return `你是一个观点分析助手。你刚刚参与了关于「${topic}」的讨论，现在需要分析自己刚才的发言与前文其他参与者的发言之间的关系。
+
+前文参与者发言：
+${priorMessagesText}
+
+你刚才的发言：
+${yourMessage}
+
+请判断你的发言与前文整体的关系：
+- consensus（共识）：你的观点与前文多数观点方向一致或补充支持
+- divergence（分歧）：你的观点与前文有明显对立、反驳或不同立场
+- neutral（中立）：你的发言是新角度、新信息或方向拓展，无明显共识/分歧
+
+只输出 JSON，不要任何额外文字：
+{"label": "consensus|divergence|neutral", "evidence": "一句话证据，不超过50字"}`
 }
 
-export interface StreamAnalysisResult {
-  label: AnalysisTag['label']
-  evidence: string
+export function buildAnalyzerPrompt(
+  topic: string,
+  priorMessages: AnalyzerPromptMessage[],
+  currentMessage: string
+): string {
+  const recent = priorMessages.slice(-5)
+  const priorText = recent.length > 0
+    ? recent.map(m => `${m.modelName}：${m.content}`).join('\n\n')
+    : '（无前文，这是首条发言）'
+  return formatAnalyzerPrompt(topic || '未指定话题', priorText, currentMessage)
+}
+
+export function parseLabelJson(text: string): { label: 'consensus' | 'divergence' | 'neutral'; evidence: string } | null {
+  const m = text.match(/\{[^{}]*"label"[^{}]*\}/)
+  if (!m) return null
+  try {
+    const obj = JSON.parse(m[0])
+    if (obj.label === 'consensus' || obj.label === 'divergence' || obj.label === 'neutral') {
+      return { label: obj.label, evidence: String(obj.evidence || '') }
+    }
+  } catch {
+    /* 忽略解析错误 */
+  }
+  return null
+}
+
+// ---------- 前端直连模型 API 自评分析 ----------
+
+export interface DirectAnalyzerMessage {
+  id: string
+  modelName: string
+  content: string
+}
+
+export interface DirectStreamAnalysisPayload {
+  topic: string
+  currentMessage: DirectAnalyzerMessage
+  priorMessages: DirectAnalyzerMessage[]
 }
 
 /**
- * 调用后端 /api/analyze/stream SSE 端点，流式接收发言者自评结果。
- * 返回 null 表示后端推了 fallback event（无 Key / HTTP 错误 / 解析失败 / 网络错误），调用方应回退 Jaccard。
+ * 前端直连模型 API 做发言者自评。
+ * 用 model.endpoint + model.apiKey 直连 OpenAI 兼容 API（与 streamChat 同链路），
+ * 累积 SSE delta 后用 parseLabelJson 解析结果。
+ * 失败（HTTP 错误 / 网络异常 / 解析失败）返回 null，调用方回退 Jaccard。
  */
-export async function streamAnalysis(
-  endpoint: string,
-  payload: StreamAnalysisPayload,
+export async function directStreamAnalysis(
+  model: { endpoint: string; apiKey: string; model: string },
+  payload: DirectStreamAnalysisPayload,
   onDelta?: (delta: string) => void,
   timeoutMs = 30000
-): Promise<StreamAnalysisResult | null> {
+): Promise<{ label: 'consensus' | 'divergence' | 'neutral'; evidence: string } | null> {
+  const prompt = buildAnalyzerPrompt(
+    payload.topic,
+    payload.priorMessages,
+    payload.currentMessage.content
+  )
+
   try {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), timeoutMs)
     try {
-      const resp = await fetch(endpoint, {
+      const response = await fetch(model.endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: ctrl.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${model.apiKey}`
+        },
+        body: JSON.stringify({
+          model: model.model,
+          messages: [{ role: 'user', content: prompt }],
+          stream: true,
+          temperature: 0.3,
+        }),
+        signal: ctrl.signal
       })
-      if (!resp.ok || !resp.body) return null
 
-      const reader = resp.body.getReader()
+      if (!response.ok || !response.body) return null
+
+      const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
-      let final: StreamAnalysisResult | null = null
+      let fullContent = ''
 
       while (true) {
         const { done, value } = await reader.read()
@@ -204,22 +234,21 @@ export async function streamAnalysis(
           const trimmed = line.trim()
           if (!trimmed.startsWith('data: ')) continue
           const data = trimmed.slice(6)
-          let evt: { type: string; content?: string; label?: string; evidence?: string }
+          if (data === '[DONE]') continue
           try {
-            evt = JSON.parse(data)
+            const json = JSON.parse(data)
+            const delta: string = json.choices?.[0]?.delta?.content || ''
+            if (delta) {
+              fullContent += delta
+              if (onDelta) onDelta(delta)
+            }
           } catch {
-            continue
-          }
-          if (evt.type === 'delta' && evt.content && onDelta) {
-            onDelta(evt.content)
-          } else if (evt.type === 'final' && evt.label) {
-            final = { label: evt.label as AnalysisTag['label'], evidence: evt.evidence || '' }
-          } else if (evt.type === 'fallback') {
-            return null  // 让上层走回退
+            /* 忽略解析错误 */
           }
         }
       }
-      return final
+
+      return parseLabelJson(fullContent)
     } finally {
       clearTimeout(timer)
     }
@@ -227,3 +256,6 @@ export async function streamAnalysis(
     return null
   }
 }
+
+// （旧 streamAnalysis / fetchAnalysis 已由 directStreamAnalysis 替代）
+

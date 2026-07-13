@@ -4,8 +4,10 @@ import {
   tokenize,
   jaccard,
   localHeuristicAnalyze,
-  streamAnalysis,
-  fetchAnalysis
+  parseLabelJson,
+  buildAnalyzerPrompt,
+  directStreamAnalysis,
+  type DirectStreamAnalysisPayload
 } from './analyzer'
 
 describe('_isCjk', () => {
@@ -177,57 +179,149 @@ describe('localHeuristicAnalyze', () => {
   })
 })
 
-// ========== streamAnalysis / fetchAnalysis 流式与回退调用层 ==========
-function makeSSEStream(chunks: string[]): ReadableStream<Uint8Array> {
-  return new ReadableStream({
-    start(controller) {
-      chunks.forEach(c => controller.enqueue(new TextEncoder().encode(c)))
-      controller.close()
-    }
+// ========== parseLabelJson（从后端移植） ==========
+
+describe('parseLabelJson', () => {
+  it('标准 JSON -> 解析成功', () => {
+    expect(parseLabelJson('{"label":"consensus","evidence":"观点一致"}')).toEqual({
+      label: 'consensus',
+      evidence: '观点一致'
+    })
   })
-}
 
-const streamPayload = {
-  topic: '测试话题',
-  currentMessage: { id: 'm1', modelName: 'A', model: 'test-model', content: '内容' },
-  priorMessages: [] as { id: string; modelName: string; model: string; content: string }[]
-}
-const fetchPayload = {
-  topic: '测试话题',
-  messages: [{ id: 'm1', modelName: 'A', content: '内容' }]
-}
+  it('带前后文 -> 仍能提取', () => {
+    expect(parseLabelJson('分析结果：{"label":"divergence","evidence":"立场对立"} 希望有帮助。')).toEqual({
+      label: 'divergence',
+      evidence: '立场对立'
+    })
+  })
 
-describe('streamAnalysis', () => {
+  it('代码块包裹 -> 仍能提取', () => {
+    expect(parseLabelJson('```json\n{"label":"neutral","evidence":"新角度"}\n```')).toEqual({
+      label: 'neutral',
+      evidence: '新角度'
+    })
+  })
+
+  it('无 label 字段 -> null', () => {
+    expect(parseLabelJson('{"evidence":"无标签"}')).toBeNull()
+  })
+
+  it('非法 label 值 -> null', () => {
+    expect(parseLabelJson('{"label":"agree","evidence":"x"}')).toBeNull()
+  })
+
+  it('破损 JSON -> null', () => {
+    expect(parseLabelJson('{label: consensus}')).toBeNull()
+  })
+
+  it('缺 evidence -> evidence 为空字符串', () => {
+    expect(parseLabelJson('{"label":"consensus"}')).toEqual({
+      label: 'consensus',
+      evidence: ''
+    })
+  })
+
+  it('多个 JSON 块取首个含 label 的', () => {
+    expect(parseLabelJson('{"foo":1} 然后 {"label":"neutral","evidence":"x"}')).toEqual({
+      label: 'neutral',
+      evidence: 'x'
+    })
+  })
+
+  it('空字符串 -> null', () => {
+    expect(parseLabelJson('')).toBeNull()
+  })
+})
+
+// ========== buildAnalyzerPrompt（从后端移植） ==========
+
+describe('buildAnalyzerPrompt', () => {
+  it('无前文 -> 含"（无前文，这是首条发言）"', () => {
+    const prompt = buildAnalyzerPrompt('话题', [], '我的发言')
+    expect(prompt).toContain('（无前文，这是首条发言）')
+    expect(prompt).toContain('话题')
+    expect(prompt).toContain('我的发言')
+  })
+
+  it('超过 5 条前文 -> 截断到最近 5 条', () => {
+    const priors = Array.from({ length: 6 }, (_, i) => ({
+      id: String(i),
+      modelName: `M${i}`,
+      content: `内容${i}`
+    }))
+    const prompt = buildAnalyzerPrompt('话题', priors, '新发言')
+    expect(prompt).not.toContain('M0')
+    expect(prompt).toContain('M1')
+    expect(prompt).toContain('M5')
+  })
+
+  it('空话题 -> 含"未指定话题"', () => {
+    const prompt = buildAnalyzerPrompt('', [], '发言')
+    expect(prompt).toContain('未指定话题')
+  })
+
+  it('所有占位符正确填充', () => {
+    const priors = [{ id: '1', modelName: 'DeepSeek', content: '前文观点' }]
+    const prompt = buildAnalyzerPrompt('AI伦理', priors, '我赞同')
+    expect(prompt).toContain('AI伦理')
+    expect(prompt).toContain('DeepSeek')
+    expect(prompt).toContain('前文观点')
+    expect(prompt).toContain('我赞同')
+  })
+})
+
+// ========== directStreamAnalysis（前端直连模型 API） ==========
+
+describe('directStreamAnalysis', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('正常流返回 final 标签', async () => {
-    const chunks = [
-      'data: {"type":"delta","content":"分析中"}\n\n',
-      'data: {"type":"final","label":"consensus","evidence":"高重合"}\n\n'
-    ]
+  const model = { endpoint: 'https://api.test/v1/chat/completions', apiKey: 'sk-test', model: 'test-model' }
+  const payload: DirectStreamAnalysisPayload = {
+    topic: '测试话题',
+    currentMessage: { id: 'm1', modelName: 'A', content: '我的发言' },
+    priorMessages: []
+  }
+
+  function makeOpenAISSEStream(chunks: string[]): ReadableStream<Uint8Array> {
+    return new ReadableStream({
+      start(controller) {
+        chunks.forEach(c => controller.enqueue(new TextEncoder().encode(c)))
+        controller.close()
+      }
+    })
+  }
+
+  function sseDelta(content: string): string {
+    return `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`
+  }
+
+  it('成功路径：delta 累积后 parseLabelJson 返回结果', async () => {
+    const labelJson = '{"label":"consensus","evidence":"观点一致"}'
+    const chunks = [sseDelta(labelJson), 'data: [DONE]\n\n']
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(makeSSEStream(chunks), { status: 200 })
+      new Response(makeOpenAISSEStream(chunks), { status: 200 })
     ))
-    const onDelta = vi.fn()
-    const r = await streamAnalysis('/api/analyze/stream', streamPayload, onDelta)
-    expect(r).toEqual({ label: 'consensus', evidence: '高重合' })
-    expect(onDelta).toHaveBeenCalledWith('分析中')
+    const r = await directStreamAnalysis(model, payload)
+    expect(r).toEqual({ label: 'consensus', evidence: '观点一致' })
   })
 
-  it('fallback 事件返回 null', async () => {
-    const chunks = ['data: {"type":"fallback","reason":"no_key"}\n\n']
+  it('onDelta 回调被正确调用', async () => {
+    const chunks = [sseDelta('分析中'), sseDelta('...'), 'data: [DONE]\n\n']
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(makeSSEStream(chunks), { status: 200 })
+      new Response(makeOpenAISSEStream(chunks), { status: 200 })
     ))
-    const r = await streamAnalysis('/api/analyze/stream', streamPayload)
-    expect(r).toBeNull()
+    const onDelta = vi.fn()
+    await directStreamAnalysis(model, payload, onDelta)
+    expect(onDelta).toHaveBeenCalledWith('分析中')
+    expect(onDelta).toHaveBeenCalledWith('...')
   })
 
   it('非 200 返回 null', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response('not found', { status: 404 })
+      new Response('error', { status: 500 })
     ))
-    const r = await streamAnalysis('/api/analyze/stream', streamPayload)
+    const r = await directStreamAnalysis(model, payload)
     expect(r).toBeNull()
   })
 
@@ -235,73 +329,58 @@ describe('streamAnalysis', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       { ok: true, status: 200, body: null }
     ))
-    const r = await streamAnalysis('/api/analyze/stream', streamPayload)
-    expect(r).toBeNull()
-  })
-
-  it('跨 buffer 边界拼接仍解析 final', async () => {
-    const line = 'data: {"type":"final","label":"divergence","evidence":"低重合"}\n\n'
-    const chunks = [line.slice(0, 30), line.slice(30)]
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(makeSSEStream(chunks), { status: 200 })
-    ))
-    const r = await streamAnalysis('/api/analyze/stream', streamPayload)
-    expect(r).toEqual({ label: 'divergence', evidence: '低重合' })
-  })
-
-  it('畸形 data 行跳过仍返回 final', async () => {
-    const chunks = [
-      'data: not-json\n\n',
-      'data: {"type":"final","label":"neutral","evidence":"中性"}\n\n'
-    ]
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(makeSSEStream(chunks), { status: 200 })
-    ))
-    const r = await streamAnalysis('/api/analyze/stream', streamPayload)
-    expect(r).toEqual({ label: 'neutral', evidence: '中性' })
-  })
-
-  it('仅 delta 无 final 返回 null', async () => {
-    const chunks = ['data: {"type":"delta","content":"思考"}\n\n']
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(makeSSEStream(chunks), { status: 200 })
-    ))
-    const r = await streamAnalysis('/api/analyze/stream', streamPayload)
-    expect(r).toBeNull()
-  })
-})
-
-describe('fetchAnalysis', () => {
-  afterEach(() => vi.unstubAllGlobals())
-
-  it('ok 含 tags 返回 tags 数组', async () => {
-    const tags = [{ id: 'a', label: 'consensus', score: 0.5, evidence: 'x' }]
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ tags }), { status: 200 })
-    ))
-    const r = await fetchAnalysis('/api/analyze', fetchPayload)
-    expect(r).toEqual(tags)
-  })
-
-  it('非 ok 返回 null', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response('err', { status: 500 })
-    ))
-    const r = await fetchAnalysis('/api/analyze', fetchPayload)
-    expect(r).toBeNull()
-  })
-
-  it('body 无 tags 字段返回 null', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({}), { status: 200 })
-    ))
-    const r = await fetchAnalysis('/api/analyze', fetchPayload)
+    const r = await directStreamAnalysis(model, payload)
     expect(r).toBeNull()
   })
 
   it('网络异常返回 null 不抛错', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')))
-    const r = await fetchAnalysis('/api/analyze', fetchPayload)
+    const r = await directStreamAnalysis(model, payload)
+    expect(r).toBeNull()
+  })
+
+  it('跨 buffer 边界拼接仍正确解析', async () => {
+    const labelJson = '{"label":"neutral","evidence":"拼接OK"}'
+    const fullLine = sseDelta(labelJson)
+    const chunks = [fullLine.slice(0, 30), fullLine.slice(30), 'data: [DONE]\n\n']
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(makeOpenAISSEStream(chunks), { status: 200 })
+    ))
+    const r = await directStreamAnalysis(model, payload)
+    expect(r).toEqual({ label: 'neutral', evidence: '拼接OK' })
+  })
+
+  it('畸形 data 行跳过仍返回结果', async () => {
+    const chunks = [
+      'data: not-json\n\n',
+      sseDelta('{"label":"divergence","evidence":"x"}'),
+      'data: [DONE]\n\n'
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(makeOpenAISSEStream(chunks), { status: 200 })
+    ))
+    const r = await directStreamAnalysis(model, payload)
+    expect(r).toEqual({ label: 'divergence', evidence: 'x' })
+  })
+
+  it('LLM 输出不含合法 JSON -> null', async () => {
+    const chunks = [sseDelta('这只是一段普通文字，没有JSON'), 'data: [DONE]\n\n']
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(makeOpenAISSEStream(chunks), { status: 200 })
+    ))
+    const r = await directStreamAnalysis(model, payload)
+    expect(r).toBeNull()
+  })
+
+  it('仅 [DONE] 无内容 -> null', async () => {
+    const chunks = ['data: [DONE]\n\n']
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(makeOpenAISSEStream(chunks), { status: 200 })
+    ))
+    const r = await directStreamAnalysis(model, payload)
     expect(r).toBeNull()
   })
 })
+
+// ========== streamAnalysis / fetchAnalysis 已由 directStreamAnalysis 替代，旧测试已删除 ==========
+
