@@ -1,7 +1,7 @@
-.PHONY: verify test-frontend typecheck-frontend test-backend build-frontend dev-frontend dev-backend
+.PHONY: verify test-frontend typecheck-frontend build-frontend dev-frontend
 
 # 一键质量门禁（推荐提交前运行）
-verify: test-frontend typecheck-frontend build-frontend test-backend
+verify: test-frontend typecheck-frontend build-frontend
 	@echo "✔ 验证通过"
 
 # 前端测试
@@ -16,14 +16,6 @@ typecheck-frontend:
 build-frontend:
 	cd frontend && npm run build
 
-# 后端测试
-test-backend:
-	cd backend && pytest
-
 # 前端开发服务器
 dev-frontend:
 	cd frontend && npm run dev
-
-# 后端开发服务器
-dev-backend:
-	cd backend && uvicorn main:app --reload --port 8000

@@ -1,0 +1,2 @@
+#!/bin/sh
+powershell.exe -NoProfile -Command "cd frontend; npm run test:run; if (\$LASTEXITCODE -ne 0) { Write-Host 'Frontend tests failed'; exit 1 }; npm run typecheck; if (\$LASTEXITCODE -ne 0) { Write-Host 'Typecheck failed'; exit 1 }; Write-Host 'All checks passed'"
