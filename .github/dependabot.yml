@@ -14,19 +14,6 @@ updates:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
 
-  # 后端 pip 依赖
-  - package-ecosystem: pip
-    directory: /backend
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: chore
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
-
   # GitHub Actions 版本更新（ci.yml / codeql.yml 用的 actions）
   - package-ecosystem: github-actions
     directory: /
