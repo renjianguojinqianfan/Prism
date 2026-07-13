@@ -423,20 +423,17 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
       }
 
       // 前端 Jaccard 回退
-      const fallbackPayload = {
-        topic: topicRef.current || '',
-        messages: [
-          ...priorAiMsgs.map(m => ({ id: m.id, modelName: m.modelName, content: m.content })),
-          { id: currentMsg.id, modelName: currentMsg.modelName, content: currentMsg.content },
-        ],
-      }
-      const localTags = localHeuristicAnalyze(fallbackPayload.messages)
+      const fallbackMessages = [
+        ...priorAiMsgs.map(m => ({ id: m.id, modelName: m.modelName, content: m.content })),
+        { id: currentMsg.id, modelName: currentMsg.modelName, content: currentMsg.content },
+      ]
+      const localTags = localHeuristicAnalyze(fallbackMessages)
       if (localTags.length > 0) {
         const myTag = localTags[localTags.length - 1]
         updateMessage(currentMsg.id, {
           tag: { label: myTag.label, evidence: myTag.evidence, analyzer: '本地启发式' }
         })
-        showToast('已使用本地分析（后端不可用或模拟模式）', 'info')
+        showToast('已使用本地分析（LLM 自评不可用或模拟模式）', 'info')
       }
     }
 

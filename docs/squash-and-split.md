@@ -61,7 +61,25 @@ git add <该组文件路径...>
 git commit -m "<type>(<scope>): <subject>"
 ```
 
-### 步骤 5：验证
+### 步骤 5：Review（git 压缩后、push 前执行）
+
+**原则**：Tag 是版本锚点，一旦推送即永久绑定。因此 Review 必须在 Tag 之前完成。
+
+#### 执行方式
+
+1. 让 Agent 执行 `git diff <压缩起点>..HEAD --name-only` 获取变更文件列表
+2. Agent 逐文件阅读改动，生成 Review 报告
+3. 报告格式：问题列表（严重程度 + 建议）+ 验证结果（typecheck / test / build）
+
+#### 决策矩阵
+
+| 最高严重程度 | 决策 |
+|-------------|------|
+| CRITICAL/HIGH | **必须修复**，修复后重新 Review |
+| MEDIUM | **建议修复**，可带修复提交后打 Tag |
+| LOW | **可选**，可记录到 TODO 后打 Tag |
+
+### 步骤 6：验证
 
 ```bash
 git log --oneline -10

@@ -1104,7 +1104,7 @@ async function analyzeSingleMessage(msgId, model, content, round) {
     // 回退：前端本地启发式分析
     const allItems = priorMsgs.concat([{ id: msgId, modelName: model.name, content }]);
     const tags = localHeuristicAnalyze(allItems);
-    showToast('已使用本地分析（后端不可用或模拟模式）', 'info');
+    showToast('已使用本地分析（LLM 自评不可用或模拟模式）', 'info');
     const myTag = tags.find(t => t.id === msgId);
     if (myTag) {
         applySingleTag(msgId, myTag.label, myTag.evidence, '本地启发式');

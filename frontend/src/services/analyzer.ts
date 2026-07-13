@@ -116,7 +116,7 @@ export function localHeuristicAnalyze(items: AnalyzeItem[]): AnalysisTag[] {
 
 // ---------- 发言者自评 prompt 构造与解析（从后端迁移） ----------
 
-export interface AnalyzerPromptMessage {
+export interface AnalyzerMessage {
   id: string
   modelName: string
   content: string
@@ -142,7 +142,7 @@ ${yourMessage}
 
 export function buildAnalyzerPrompt(
   topic: string,
-  priorMessages: AnalyzerPromptMessage[],
+  priorMessages: AnalyzerMessage[],
   currentMessage: string
 ): string {
   const recent = priorMessages.slice(-5)
@@ -168,16 +168,10 @@ export function parseLabelJson(text: string): { label: 'consensus' | 'divergence
 
 // ---------- 前端直连模型 API 自评分析 ----------
 
-export interface DirectAnalyzerMessage {
-  id: string
-  modelName: string
-  content: string
-}
-
 export interface DirectStreamAnalysisPayload {
   topic: string
-  currentMessage: DirectAnalyzerMessage
-  priorMessages: DirectAnalyzerMessage[]
+  currentMessage: AnalyzerMessage
+  priorMessages: AnalyzerMessage[]
 }
 
 /**
@@ -256,6 +250,4 @@ export async function directStreamAnalysis(
     return null
   }
 }
-
-// （旧 streamAnalysis / fetchAnalysis 已由 directStreamAnalysis 替代）
 
