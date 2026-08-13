@@ -232,6 +232,20 @@ describe('parseLabelJson', () => {
   it('空字符串 -> null', () => {
     expect(parseLabelJson('')).toBeNull()
   })
+
+  it('evidence 含花括号时仍能解析（括号配对验证）', () => {
+    expect(parseLabelJson('{"label":"divergence","evidence":"包含 {嵌套} 内容"}')).toEqual({
+      label: 'divergence',
+      evidence: '包含 {嵌套} 内容'
+    })
+  })
+
+  it('带前后文且 evidence 含花括号：整体解析失败走配对扫描', () => {
+    expect(parseLabelJson('分析结果：```json\n{"label":"consensus","evidence":"结论 {A} 与 {B} 一致"}\n```')).toEqual({
+      label: 'consensus',
+      evidence: '结论 {A} 与 {B} 一致'
+    })
+  })
 })
 
 // ========== buildAnalyzerPrompt（从后端移植） ==========

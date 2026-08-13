@@ -31,6 +31,10 @@ export function buildAPIHistory(
     role: 'user',
     content: `现在轮到你发言了。请从你的独特视角出发，对话题「${topic}」发表第${currentRound}轮观点。`
   })
+  // 历史截断：仅超长时保留 system 提示 + 最近 20 条历史 + 末尾 user 提示，防止超长上下文
+  if (history.length > 22) {
+    return [history[0], ...history.slice(-21)]
+  }
   return history
 }
 

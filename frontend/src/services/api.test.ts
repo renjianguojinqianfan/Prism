@@ -80,6 +80,24 @@ describe('buildAPIHistory', () => {
     expect(r).toHaveLength(2)
     expect(r.find(m => m.content.includes('系统'))).toBeFalsy()
   })
+
+  it('超长历史被截断：保留 system + 最近 20 条 + user 提示', () => {
+    const msgs: Message[] = Array.from({ length: 30 }, (_, i) => ({
+      id: `m${i}`,
+      role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: `内容${i}`,
+      modelId: i % 2 === 0 ? 'user' : 'm1',
+      modelName: i % 2 === 0 ? '你' : 'A'
+    }))
+    const r = buildAPIHistory(baseModel, 1, 'X', msgs)
+    // system + 21 条（最近 20 条历史 + 末尾 user 提示）
+    expect(r).toHaveLength(22)
+    expect(r[0].role).toBe('system')
+    expect(r[r.length - 1].role).toBe('user')
+    // 最早的历史消息被丢弃，最近的消息保留（内容带 [主持人]/[A] 前缀）
+    expect(r.some(m => m.content.includes('内容0'))).toBe(false)
+    expect(r.some(m => m.content.includes('内容29'))).toBe(true)
+  })
 })
 
 // ========== streamChat 流式调用层 ==========

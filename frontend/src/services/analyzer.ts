@@ -153,16 +153,41 @@ export function buildAnalyzerPrompt(
   return formatAnalyzerPrompt(topic || '未指定话题', priorText, currentMessage)
 }
 
+const LABEL_VALUES = ['consensus', 'divergence', 'neutral'] as const
+
 export function parseLabelJson(text: string): { label: 'consensus' | 'divergence' | 'neutral'; evidence: string } | null {
-  const m = text.match(/\{[^{}]*"label"[^{}]*\}/)
-  if (!m) return null
+  // 1) 先尝试整体解析（LLM 只输出纯净 JSON 的最常见情况）
   try {
-    const obj = JSON.parse(m[0])
-    if (obj.label === 'consensus' || obj.label === 'divergence' || obj.label === 'neutral') {
+    const obj = JSON.parse(text)
+    if (obj && LABEL_VALUES.includes(obj.label)) {
       return { label: obj.label, evidence: String(obj.evidence || '') }
     }
   } catch {
-    /* 忽略解析错误 */
+    /* 继续扫描提取 */
+  }
+
+  // 2) 扫描每个 `{`，括号配对到深度归零取完整对象候选（evidence 可能含花括号）
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '{') continue
+    let depth = 0
+    let j = i
+    for (; j < text.length; j++) {
+      if (text[j] === '{') depth++
+      else if (text[j] === '}') depth--
+      if (depth === 0) break
+    }
+    if (depth !== 0) break // 未闭合，后面不可能有合法对象
+    const candidate = text.slice(i, j + 1)
+    i = j // 跳过已扫描的候选
+    if (!candidate.includes('"label"')) continue
+    try {
+      const obj = JSON.parse(candidate)
+      if (obj && LABEL_VALUES.includes(obj.label)) {
+        return { label: obj.label, evidence: String(obj.evidence || '') }
+      }
+    } catch {
+      /* 尝试下一个候选 */
+    }
   }
   return null
 }
