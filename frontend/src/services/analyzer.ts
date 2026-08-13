@@ -7,7 +7,7 @@ interface AnalyzeItem {
   content: string
 }
 
-const _STOPWORDS = new Set<string>([
+const STOPWORDS = new Set<string>([
   '的', '是', '了', '和', '与', '并', '就', '也', '在', '对', '从', '把', '被',
   '我', '你', '他', '她', '它', '我们', '你们', '他们', '这', '那', '这个', '那个',
   '但', '而', '或', '如果', '因为', '所以', '一个', '一种', '可以', '需要', '进行',
@@ -16,7 +16,7 @@ const _STOPWORDS = new Set<string>([
   'those', 'it', 'as', 'by', 'with', 'from', 'we', 'you', 'they', 'i', 'he', 'she'
 ])
 
-export function _isCjk(ch: string): boolean {
+export function isCjk(ch: string): boolean {
   if (!ch) return false
   const cp = ch.charCodeAt(0)
   return (
@@ -36,7 +36,7 @@ export function tokenize(text: string): Set<string> {
   const flushAscii = () => {
     if (buf.length > 0) {
       const word = buf.join('').toLowerCase()
-      if (word.length >= 2 && !_STOPWORDS.has(word)) {
+      if (word.length >= 2 && !STOPWORDS.has(word)) {
         tokens.add(word)
       }
       buf.length = 0
@@ -47,7 +47,7 @@ export function tokenize(text: string): Set<string> {
     if (cjkChars.length >= 2) {
       for (let i = 0; i < cjkChars.length - 1; i++) {
         const bigram = cjkChars[i] + cjkChars[i + 1]
-        if (!_STOPWORDS.has(bigram)) {
+        if (!STOPWORDS.has(bigram)) {
           tokens.add(bigram)
         }
       }
@@ -56,7 +56,7 @@ export function tokenize(text: string): Set<string> {
   }
 
   for (const ch of text) {
-    if (_isCjk(ch)) {
+    if (isCjk(ch)) {
       flushAscii()
       cjkChars.push(ch)
     } else if (/[a-zA-Z0-9]/.test(ch)) {

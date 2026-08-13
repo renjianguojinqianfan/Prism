@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
-  _isCjk,
+  isCjk,
   tokenize,
   jaccard,
   localHeuristicAnalyze,
@@ -10,27 +10,27 @@ import {
   type DirectStreamAnalysisPayload
 } from './analyzer'
 
-describe('_isCjk', () => {
+describe('isCjk', () => {
   it('汉字 → true', () => {
-    expect(_isCjk('中')).toBe(true)
-    expect(_isCjk('文')).toBe(true)
+    expect(isCjk('中')).toBe(true)
+    expect(isCjk('文')).toBe(true)
   })
   it('CJK 扩展 A 区 → true', () => {
     // 㐀 U+3400
-    expect(_isCjk('㐀')).toBe(true)
+    expect(isCjk('㐀')).toBe(true)
   })
   it('兼容汉字 → true', () => {
     // 豈 U+F900
-    expect(_isCjk('豈')).toBe(true)
+    expect(isCjk('豈')).toBe(true)
   })
   it('ASCII / 空格 / 标点 → false', () => {
-    expect(_isCjk('a')).toBe(false)
-    expect(_isCjk(' ')).toBe(false)
-    expect(_isCjk(',')).toBe(false)
-    expect(_isCjk('1')).toBe(false)
+    expect(isCjk('a')).toBe(false)
+    expect(isCjk(' ')).toBe(false)
+    expect(isCjk(',')).toBe(false)
+    expect(isCjk('1')).toBe(false)
   })
   it('空字符串 → false', () => {
-    expect(_isCjk('')).toBe(false)
+    expect(isCjk('')).toBe(false)
   })
 })
 
