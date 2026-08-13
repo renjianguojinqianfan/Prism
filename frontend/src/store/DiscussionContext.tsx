@@ -8,141 +8,11 @@ import {
   useRef,
   type ReactNode
 } from 'react'
-import type { Message, ModelConfig, ToastItem, ToastType } from './types'
-import { STORAGE_KEY, LEGACY_STORAGE_KEY, type QuickTemplate } from '../config/presetModels'
-import { buildAPIHistory, streamChat } from '../services/api'
-import { generateSimReply } from '../services/simulator'
-import { directStreamAnalysis, localHeuristicAnalyze, type DirectStreamAnalysisPayload } from '../services/analyzer'
-import { sleep, genId } from '../utils/sleep'
-
-export interface State {
-  models: ModelConfig[]
-  messages: Message[]
-  simulate: boolean
-  maxRounds: number
-  discussionActive: boolean
-  discussionPaused: boolean
-  currentRound: number
-  speakingModelId: string | null
-  settingsOpen: boolean
-  inputText: string
-  toasts: ToastItem[]
-}
-
-export type Action =
-  | { type: 'SET_MODELS'; models: ModelConfig[] }
-  | { type: 'UPDATE_MODEL'; idx: number; patch: Partial<ModelConfig> }
-  | { type: 'ADD_MODEL'; model: ModelConfig }
-  | { type: 'REMOVE_MODEL'; idx: number }
-  | { type: 'TOGGLE_MODEL_ENABLED'; id: string }
-  | { type: 'SET_SIMULATE'; value: boolean }
-  | { type: 'SET_MAX_ROUNDS'; value: number }
-  | { type: 'SET_INPUT'; value: string }
-  | { type: 'ADD_MESSAGE'; message: Message }
-  | { type: 'UPDATE_MESSAGE'; id: string; patch: Partial<Message> }
-  | { type: 'CLEAR_MESSAGES' }
-  | { type: 'SET_DISCUSSION_ACTIVE'; value: boolean }
-  | { type: 'SET_PAUSED'; value: boolean }
-  | { type: 'SET_CURRENT_ROUND'; value: number }
-  | { type: 'SET_SPEAKING'; id: string | null }
-  | { type: 'SET_SETTINGS_OPEN'; value: boolean }
-  | { type: 'ADD_TOAST'; toast: ToastItem }
-  | { type: 'REMOVE_TOAST'; id: string }
-
-export function loadModels(): ModelConfig[] {
-  let saved = localStorage.getItem(STORAGE_KEY)
-  if (!saved) {
-    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
-    if (legacy) {
-      saved = legacy
-      localStorage.setItem(STORAGE_KEY, legacy)
-      localStorage.removeItem(LEGACY_STORAGE_KEY)
-    }
-  }
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved)
-      if (Array.isArray(parsed) && parsed.every(m =>
-        m && typeof m.endpoint === 'string' && typeof m.model === 'string'
-      )) {
-        return parsed as ModelConfig[]
-      }
-    } catch {
-      // 损坏数据，返回空
-    }
-  }
-  return []
-}
-
-function initState(): State {
-  const models = loadModels()
-  return {
-    models,
-    messages: [],
-    simulate: true,
-    maxRounds: 2,
-    discussionActive: false,
-    discussionPaused: false,
-    currentRound: 0,
-    speakingModelId: null,
-    // 模型列表为空时自动展开配置面板，引导用户添加模型
-    settingsOpen: models.length === 0,
-    inputText: '',
-    toasts: []
-  }
-}
-
-export function reducer(state: State, action: Action): State {
-  switch (action.type) {
-    case 'SET_MODELS':
-      return { ...state, models: action.models }
-    case 'UPDATE_MODEL':
-      return {
-        ...state,
-        models: state.models.map((m, i) => (i === action.idx ? { ...m, ...action.patch } : m))
-      }
-    case 'ADD_MODEL':
-      return { ...state, models: [...state.models, action.model] }
-    case 'REMOVE_MODEL':
-      return { ...state, models: state.models.filter((_, i) => i !== action.idx) }
-    case 'TOGGLE_MODEL_ENABLED':
-      return {
-        ...state,
-        models: state.models.map(m => (m.id === action.id ? { ...m, enabled: !m.enabled } : m))
-      }
-    case 'SET_SIMULATE':
-      return { ...state, simulate: action.value }
-    case 'SET_MAX_ROUNDS':
-      return { ...state, maxRounds: action.value }
-    case 'SET_INPUT':
-      return { ...state, inputText: action.value }
-    case 'ADD_MESSAGE':
-      return { ...state, messages: [...state.messages, action.message] }
-    case 'UPDATE_MESSAGE':
-      return {
-        ...state,
-        messages: state.messages.map(m => (m.id === action.id ? { ...m, ...action.patch } : m))
-      }
-    case 'CLEAR_MESSAGES':
-      return { ...state, messages: [] }
-    case 'SET_DISCUSSION_ACTIVE':
-      return { ...state, discussionActive: action.value }
-    case 'SET_PAUSED':
-      return { ...state, discussionPaused: action.value }
-    case 'SET_CURRENT_ROUND':
-      return { ...state, currentRound: action.value }
-    case 'SET_SPEAKING':
-      return { ...state, speakingModelId: action.id }
-    case 'SET_SETTINGS_OPEN':
-      return { ...state, settingsOpen: action.value }
-    case 'ADD_TOAST':
-      return { ...state, toasts: [...state.toasts, action.toast] }
-    case 'REMOVE_TOAST':
-      return { ...state, toasts: state.toasts.filter(t => t.id !== action.id) }
-    default:
-      return state
-  }
-}
+import type { ModelConfig, ToastType } from './types'
+import { reducer, initState, type State } from './reducer'
+import { STORAGE_KEY, type QuickTemplate } from '../config/presetModels'
+import { DiscussionEngine, type DiscussionConfig, type EngineCallbacks } from '../services/discussionEngine'
+import { genId } from '../utils/sleep'
 
 interface DiscussionContextValue {
   state: State
@@ -169,23 +39,16 @@ interface DiscussionContextValue {
 
 const DiscussionContext = createContext<DiscussionContextValue | null>(null)
 
+export function useDiscussion(): DiscussionContextValue {
+  const ctx = useContext(DiscussionContext)
+  if (!ctx) throw new Error('useDiscussion 必须在 DiscussionProvider 内使用')
+  return ctx
+}
+
 export function DiscussionProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, initState)
 
-  const messagesRef = useRef<Message[]>([])
-  const topicRef = useRef('')
   const toastTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
-  const controlRef = useRef({
-    active: false,
-    paused: false,
-    skipRequested: false,
-    abortController: null as AbortController | null,
-    discussionToken: null as string | null
-  })
-
-  useEffect(() => {
-    messagesRef.current = state.messages
-  }, [state.messages])
 
   useEffect(() => {
     return () => {
@@ -213,17 +76,18 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'REMOVE_TOAST', id })
   }, [])
 
-  const pushMessage = useCallback((msg: Message) => {
-    messagesRef.current = [...messagesRef.current, msg]
-    dispatch({ type: 'ADD_MESSAGE', message: msg })
-  }, [])
-
-  const updateMessage = useCallback((id: string, patch: Partial<Message>) => {
-    messagesRef.current = messagesRef.current.map(m =>
-      m.id === id ? { ...m, ...patch } : m
-    )
-    dispatch({ type: 'UPDATE_MESSAGE', id, patch })
-  }, [])
+  // 引擎实例（useRef 保持单例），副作用经 4 个回调出口
+  const engineRef = useRef<DiscussionEngine | null>(null)
+  if (!engineRef.current) {
+    const callbacks: EngineCallbacks = {
+      onMessage: (msg) => dispatch({ type: 'ADD_MESSAGE', message: msg }),
+      onUpdate: (id, patch) => dispatch({ type: 'UPDATE_MESSAGE', id, patch }),
+      onDispatch: dispatch,
+      onToast: showToast,
+    }
+    engineRef.current = new DiscussionEngine(callbacks)
+  }
+  const engine = engineRef.current
 
   const setSimulate = useCallback((v: boolean) => dispatch({ type: 'SET_SIMULATE', value: v }), [])
   const setMaxRounds = useCallback((v: number) => dispatch({ type: 'SET_MAX_ROUNDS', value: v }), [])
@@ -243,7 +107,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
         endpoint: 'https://api.example.com/v1/chat/completions',
         model: 'model-name',
         apiKey: '',
-        systemPrompt: '你是一位独特的AI讨论者，拥有自己的视角和风格。在讨论中，你总是提供有价值的观点。',
+        systemPrompt: '你是自定义模型，请从你的视角参与讨论。',
         enabled: true,
         custom: true
       }
@@ -268,31 +132,9 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
   const openSettings = useCallback(() => dispatch({ type: 'SET_SETTINGS_OPEN', value: true }), [])
   const closeSettings = useCallback(() => dispatch({ type: 'SET_SETTINGS_OPEN', value: false }), [])
 
-  const togglePause = useCallback(() => {
-    controlRef.current.paused = !controlRef.current.paused
-    dispatch({ type: 'SET_PAUSED', value: controlRef.current.paused })
-  }, [])
-
-  const nextSpeaker = useCallback(() => {
-    controlRef.current.skipRequested = true
-    controlRef.current.abortController?.abort()
-    showToast('已跳过当前发言者', 'info')
-  }, [showToast])
-
-  const resetDiscussion = useCallback(() => {
-    controlRef.current.active = false
-    controlRef.current.paused = false
-    controlRef.current.discussionToken = null
-    controlRef.current.abortController?.abort()
-    messagesRef.current = []
-    dispatch({ type: 'CLEAR_MESSAGES' })
-    dispatch({ type: 'SET_DISCUSSION_ACTIVE', value: false })
-    dispatch({ type: 'SET_PAUSED', value: false })
-    dispatch({ type: 'SET_SPEAKING', id: null })
-    dispatch({ type: 'SET_CURRENT_ROUND', value: 0 })
-    dispatch({ type: 'SET_INPUT', value: '' })
-    showToast('讨论已重置', 'info')
-  }, [showToast])
+  const togglePause = useCallback(() => engine.togglePause(), [engine])
+  const nextSpeaker = useCallback(() => engine.skip(), [engine])
+  const resetDiscussion = useCallback(() => engine.reset(), [engine])
 
   const value = useMemo<DiscussionContextValue>(() => {
     const persistModels = () => {
@@ -309,256 +151,33 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
       showToast('配置已保存', 'success')
     }
 
-    const endDiscussion = () => {
-      controlRef.current.active = false
-      controlRef.current.paused = false
-      controlRef.current.discussionToken = null
-      dispatch({ type: 'SET_DISCUSSION_ACTIVE', value: false })
-      dispatch({ type: 'SET_PAUSED', value: false })
-      dispatch({ type: 'SET_SPEAKING', id: null })
-      dispatch({ type: 'SET_CURRENT_ROUND', value: 0 })
-    }
-
-    const generateResponse = async (model: ModelConfig, round: number, simulate: boolean, token: string) => {
-      controlRef.current.skipRequested = false
-      const msgId = genId()
-      let fullContent = ''
-
-      try {
-        if (simulate) {
-          const reply = generateSimReply(model, topicRef.current, messagesRef.current, round)
-          pushMessage({
-            id: msgId,
-            role: 'assistant',
-            content: '',
-            modelId: model.id,
-            modelName: model.name,
-            round,
-            thinking: true
-          })
-          for (let i = 0; i < reply.length; i++) {
-            if (!controlRef.current.active || controlRef.current.discussionToken !== token) return
-            if (controlRef.current.skipRequested) {
-              fullContent = reply
-              updateMessage(msgId, { content: fullContent, thinking: true })
-              break
-            }
-            while (controlRef.current.paused) {
-              await sleep(100)
-              if (!controlRef.current.active || controlRef.current.discussionToken !== token) return
-            }
-            fullContent += reply[i]
-            updateMessage(msgId, { content: fullContent, thinking: true })
-            await sleep(20 + Math.random() * 30)
-          }
-          controlRef.current.skipRequested = false
-        } else {
-          // 先构建 API 历史（此时 messagesRef.current 不含当前发言的占位消息）
-          controlRef.current.abortController = new AbortController()
-          const timeoutTimer = setTimeout(() => controlRef.current.abortController?.abort(), 120000)
-          try {
-            const history = buildAPIHistory(model, round, topicRef.current, messagesRef.current)
-
-            // 再推占位消息用于 UI 流式显示
-            pushMessage({
-              id: msgId,
-              role: 'assistant',
-              content: '',
-              modelId: model.id,
-              modelName: model.name,
-              round,
-              thinking: true
-            })
-
-            fullContent = await streamChat(
-              model,
-              history,
-              controlRef.current.abortController.signal,
-              (_delta, full) => {
-                updateMessage(msgId, { content: full, thinking: true })
-              }
-            )
-          } finally {
-            clearTimeout(timeoutTimer)
-          }
-        }
-      } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') {
-          const current = messagesRef.current.find(m => m.id === msgId)
-          const content = current?.content || '[已跳过]'
-          updateMessage(msgId, { content, thinking: false })
-          return
-        }
-        const errMsg = err instanceof Error ? err.message : String(err)
-        fullContent = `[调用失败] ${errMsg}`
-        showToast(`${model.name} 调用出错：${errMsg}`, 'error')
-      }
-
-      updateMessage(msgId, { content: fullContent, thinking: false })
-    }
-
-    const streamAnalyzeMessage = async (
-      currentMsg: Message,
-      priorAiMsgs: Message[],
-      isBaseline: boolean,
-      simulate: boolean
-    ) => {
-      // 第一条 AI 发言作为基准，不带标签
-      if (isBaseline) return
-
-      const model = state.models.find(m => m.id === currentMsg.modelId)
-      if (!model) return
-
-      // 模拟模式：跳过 LLM 调用，直接走 Jaccard（与现状一致）
-      if (!simulate && model.apiKey) {
-        const payload: DirectStreamAnalysisPayload = {
-          topic: topicRef.current || '',
-          currentMessage: {
-            id: currentMsg.id,
-            modelName: currentMsg.modelName,
-            content: currentMsg.content,
-          },
-          priorMessages: priorAiMsgs.map(m => ({
-            id: m.id,
-            modelName: m.modelName,
-            content: m.content,
-          })),
-        }
-        const ctrl = new AbortController()
-        controlRef.current.abortController = ctrl
-        const finalTag = await directStreamAnalysis(model, payload, undefined, 30000, ctrl.signal)
-        if (finalTag) {
-          updateMessage(currentMsg.id, {
-            tag: { label: finalTag.label, evidence: finalTag.evidence, analyzer: currentMsg.modelName }
-          })
-          return
-        }
-        // 流式失败，继续走 Jaccard 回退
-      }
-
-      // 前端 Jaccard 回退
-      const fallbackMessages = [
-        ...priorAiMsgs.map(m => ({ id: m.id, modelName: m.modelName, content: m.content })),
-        { id: currentMsg.id, modelName: currentMsg.modelName, content: currentMsg.content },
-      ]
-      const localTags = localHeuristicAnalyze(fallbackMessages)
-      if (localTags.length > 0) {
-        const myTag = localTags[localTags.length - 1]
-        updateMessage(currentMsg.id, {
-          tag: { label: myTag.label, evidence: myTag.evidence, analyzer: '本地启发式' }
-        })
-        showToast('已使用本地分析（LLM 自评不可用或模拟模式）', 'info')
-      }
-    }
-
-    const runDiscussion = async (simulate: boolean, token: string) => {
-      const enabledModels = state.models.filter(m => m.enabled)
-      if (enabledModels.length === 0) return
-
-      for (let round = 1; round <= state.maxRounds; round++) {
-        dispatch({ type: 'SET_CURRENT_ROUND', value: round })
-        for (const model of enabledModels) {
-          while (controlRef.current.paused) {
-            await sleep(200)
-            if (!controlRef.current.active || controlRef.current.discussionToken !== token) return
-          }
-          if (!controlRef.current.active || controlRef.current.discussionToken !== token) return
-
-          if (!simulate && !model.apiKey) {
-            pushMessage({
-              id: genId(),
-              role: 'system',
-              content: `${model.name} 未配置API Key，跳过`,
-              modelId: null,
-              modelName: ''
-            })
-            continue
-          }
-
-          dispatch({ type: 'SET_SPEAKING', id: model.id })
-          await generateResponse(model, round, simulate, token)
-          dispatch({ type: 'SET_SPEAKING', id: null })
-          if (controlRef.current.discussionToken !== token) return
-
-          // 实时增量分析：发言结束后立即分析这条（不等到全部讨论结束）
-          const aiMsgs = messagesRef.current.filter(m => m.role === 'assistant' && !m.thinking)
-          if (aiMsgs.length > 0) {
-            const current = aiMsgs[aiMsgs.length - 1]
-            const prior = aiMsgs.slice(0, -1)
-            const isBaseline = aiMsgs.length === 1
-            await streamAnalyzeMessage(current, prior, isBaseline, simulate)
-          }
-
-          await sleep(600)
-        }
-      }
-
-      pushMessage({
-        id: genId(),
-        role: 'system',
-        content: '讨论结束',
-        modelId: null,
-        modelName: ''
-      })
-      endDiscussion()
-    }
-
     const startDiscussion = () => {
       const topic = state.inputText.trim()
       if (!topic) {
         showToast('请输入话题或想法', 'warning')
         return
       }
-
       const enabledModels = state.models.filter(m => m.enabled)
       if (enabledModels.length === 0) {
         showToast('请至少启用一个模型', 'warning')
         return
       }
-
-      controlRef.current.active = true
-      controlRef.current.paused = false
-      controlRef.current.skipRequested = false
-      const token = genId()
-      controlRef.current.discussionToken = token
-      dispatch({ type: 'SET_DISCUSSION_ACTIVE', value: true })
-      dispatch({ type: 'SET_PAUSED', value: false })
-      dispatch({ type: 'SET_CURRENT_ROUND', value: 0 })
-      messagesRef.current = []
+      const config: DiscussionConfig = {
+        models: state.models,
+        simulate: state.simulate,
+        maxRounds: state.maxRounds,
+        topic,
+      }
       dispatch({ type: 'CLEAR_MESSAGES' })
       dispatch({ type: 'SET_INPUT', value: '' })
-
-      pushMessage({
-        id: genId(),
-        role: 'system',
-        content: `讨论话题：${topic}`,
-        modelId: null,
-        modelName: ''
-      })
-      pushMessage({
-        id: genId(),
-        role: 'user',
-        content: topic,
-        modelId: 'user',
-        modelName: '你'
-      })
-
-      topicRef.current = topic
-      void runDiscussion(state.simulate, token)
+      engine.start(config)
     }
 
     const interject = () => {
       const topic = state.inputText.trim()
       if (!topic) return
-      pushMessage({
-        id: genId(),
-        role: 'user',
-        content: topic,
-        modelId: 'user',
-        modelName: '你'
-      })
-      showToast('你的观点已加入讨论', 'success')
       dispatch({ type: 'SET_INPUT', value: '' })
+      engine.interject(topic)
     }
 
     const exportDiscussion = () => {
@@ -566,8 +185,10 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
         showToast('暂无讨论内容可导出', 'warning')
         return
       }
+      // 话题取第一条 user 消息（start 时写入的初始话题）
+      const firstUser = state.messages.find(m => m.role === 'user')
       let text = `# 棱镜 — 讨论记录\n\n`
-      text += `## 话题：${topicRef.current || '自由讨论'}\n\n`
+      text += `## 话题：${firstUser?.content || '自由讨论'}\n\n`
       text += `---\n\n`
       state.messages.forEach(msg => {
         if (msg.role === 'user') {
@@ -612,6 +233,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
     }
   }, [
     state,
+    engine,
     setSimulate,
     setMaxRounds,
     setInput,
@@ -626,16 +248,12 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
     nextSpeaker,
     resetDiscussion,
     showToast,
-    dismissToast,
-    pushMessage,
-    updateMessage
+    dismissToast
   ])
 
-  return <DiscussionContext.Provider value={value}>{children}</DiscussionContext.Provider>
-}
-
-export function useDiscussion(): DiscussionContextValue {
-  const ctx = useContext(DiscussionContext)
-  if (!ctx) throw new Error('useDiscussion must be used within DiscussionProvider')
-  return ctx
+  return (
+    <DiscussionContext.Provider value={value}>
+      {children}
+    </DiscussionContext.Provider>
+  )
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { reducer, type State, type Action } from './DiscussionContext'
+import { reducer, type State, type Action } from './reducer'
 import type { Message, ModelConfig, ToastItem } from './types'
 
 const baseModel: ModelConfig = {

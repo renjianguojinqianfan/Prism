@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { loadModels } from './DiscussionContext'
+import { loadModels } from './reducer'
 import { STORAGE_KEY, LEGACY_STORAGE_KEY } from '../config/presetModels'
 import type { ModelConfig } from './types'
 
