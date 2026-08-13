@@ -59,7 +59,7 @@ npm run dev
 
 项目已搭建前端单元测试基础设施，提交前需保证全绿。
 
-**前端（vitest，116 用例 / 8 文件）**：
+**前端（vitest，131 用例 / 10 文件）**：
 
 ```bash
 cd frontend
@@ -68,11 +68,11 @@ npm run test:run      # 一次性运行
 npm test              # watch 模式
 ```
 
-覆盖范围：`services/{simulator,api,analyzer}.test.ts` / `store/{reducer,loadModels}.test.ts` / `utils/{escape,markdown,sleep}.test.ts`。
+覆盖范围：`services/{simulator,api,analyzer,discussionEngine}.test.ts` / `store/{reducer,loadModels}.test.ts` / `utils/{escape,markdown,sleep,sse}.test.ts`。
 
 测试基础设施说明：
 - 前端 `vitest.config.ts` 配置 jsdom 环境 + globals 模式；`src/vite-env.d.ts` 引入 `vitest/globals` 类型
-- 为可测试性，源文件做了最小 export 调整（`analyzer.ts` 的 `tokenize` / `jaccard` / `_isCjk`；`DiscussionContext.tsx` 的 `reducer` / `State` / `Action`），无行为变化
+- 为可测试性做了最小 export 调整：`analyzer.ts` 导出 `tokenize` / `jaccard` / `isCjk`；状态机抽到 `store/reducer.ts`；讨论编排抽到 `services/discussionEngine.ts`（class 引擎，控制状态 private，4 个回调出口）后获得独立单测覆盖，无行为变化
 
 ### 类型检查与构建
 

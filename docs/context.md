@@ -8,9 +8,9 @@
 ### 1.1 前端分层
 
 - `src/components/` - UI 组件（Header / RoleBar / ModelSelector / MessageList / MessageBubble / InputBar / SettingsPanel / Toast）
-- `src/store/` - 状态管理（Context + useReducer，类型集中在 types.ts）
-- `src/services/` - 业务逻辑（API 调用 `api.ts` / 分析器 `analyzer.ts` / 模拟器 `simulator.ts`）
-- `src/utils/` - 工具函数（HTML 转义 `escape.ts` / Markdown 封装 `markdown.ts` / 延时 `sleep.ts`）
+- `src/store/` - 状态管理（`DiscussionContext.tsx` 提供 Provider 并委托引擎；`reducer.ts` 承载 State/Action/initState/reducer 纯函数；类型集中在 types.ts）
+- `src/services/` - 业务逻辑（API 调用 `api.ts` / 分析器 `analyzer.ts` / 模拟器 `simulator.ts` / 编排引擎 `discussionEngine.ts`）
+- `src/utils/` - 工具函数（HTML 转义 `escape.ts` / Markdown 封装 `markdown.ts` / 延时 `sleep.ts` / SSE 解析 `sse.ts`）
 - `src/config/` - 预设模型配置（`presetModels.ts`，5 个快速添加模板）
 - `src/App.css` - 全局深色赛博朋克主题（CSS 变量 `--bg/--fg/--accent` 等），全局动效
 
@@ -32,6 +32,13 @@
 - **主路径**：前端直连 LLM 自评（流式 SSE）
 - **回退路径**：前端 Jaccard 启发式分析（自评失败时回退，见 `frontend/src/services/analyzer.ts` 的 `localHeuristicAnalyze`）
 - **阈值**：Jaccard 回退路径的阈值（当前 HIGH=0.14, LOW=0.11）仅在前端一份，见 `frontend/src/services/analyzer.ts`
+
+### 2.4 讨论编排架构（2026-08-13 重构）
+
+- **编排引擎**（`services/discussionEngine.ts`）：class-based `DiscussionEngine`，控制状态（active/paused/skipRequested/abortController/token）为 private 实现，接口仅 `start / togglePause / skip / reset / interject` 五个命令，副作用经 4 个回调出口（onMessage / onUpdate / onDispatch / onToast）交给 `DiscussionContext.tsx`。编排逻辑因此可独立单测（mock 4 个回调即可，见 `discussionEngine.test.ts`）。
+- **状态机**（`store/reducer.ts`）：`State` / `Action` / `reducer` / `initState` / `loadModels`（含运行时校验）为纯函数，无 React 依赖。
+- **SSE 解析**（`utils/sse.ts`）：`parseSSEStream` 统一处理跨 chunk buffer / `data:` 前缀过滤 / `[DONE]` 跳过，`api.ts` 与 `analyzer.ts` 复用，消除重复。
+- **模拟模板匹配**：`ModelConfig.simulatorId` 关联角色模板（deepseek/kimi/glm/qwen），用户改名不影响匹配，缺失时回退 deepseek。
 
 ## 3. CI/CD架构
 

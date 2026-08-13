@@ -36,6 +36,7 @@ make verify
 - `.githooks/` - Git hooks（commit-msg + pre-commit，通过 `core.hooksPath` 配置）
 - `Makefile` - 质量门禁命令
 - `.github/` - CI/CD 配置（GitHub Actions workflows + Dependabot）
+- `docs/agents/` - 工程技能体系配置（issue tracker / triage 标签 / domain docs）
 - `.trae/specs/` - Spec 驱动开发的规格文档
 - `.trae/documents/` - 发版流程等规划文档
 
@@ -46,7 +47,7 @@ make verify
 - **一个对话 = 一个任务**：不混杂多个不相关的改动
 - **TypeScript 严格模式**：`frontend/tsconfig.json` 开启 `strict`、`noUnusedLocals`、`noUnusedParameters`，新增代码必须通过 `npm run typecheck`
 - **UI 风格锁定**：深色赛博朋克主题（`App.css` 中的 CSS 变量 `--bg/--fg/--accent` 等），全局动效（背景光、浮动光点、发言脉冲、消息入场、打字光标）不得擅自移除或改色
-- **无第三方状态库**：状态统一在 `DiscussionContext.tsx` 中用 `useReducer`+`useRef` 管理，不要引入 Redux/Zustand/Jotai 等
+- **无第三方状态库**：状态在 `store/reducer.ts` 用 `useReducer` 管理，讨论编排逻辑在 `services/discussionEngine.ts`（class 引擎，副作用经 4 个回调出口），不要引入 Redux/Zustand/Jotai 等
 - **组件拆分原则**：按现有目录约定放置，新增组件放 `frontend/src/components/`，纯逻辑放 `services/` 或 `utils/`，类型集中在 `store/types.ts`
 - **禁止硬编码密钥**：发言和分析用 API Key 均通过用户输入 + localStorage 持久化，前端直连模型 API，Key 不经过服务器
 
