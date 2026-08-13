@@ -158,6 +158,7 @@ interface DiscussionContextValue {
   openSettings: () => void
   closeSettings: () => void
   startDiscussion: () => void
+  interject: () => void
   togglePause: () => void
   nextSpeaker: () => void
   resetDiscussion: () => void
@@ -508,18 +509,6 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
         showToast('请输入话题或想法', 'warning')
         return
       }
-      if (state.discussionActive) {
-        pushMessage({
-          id: genId(),
-          role: 'user',
-          content: topic,
-          modelId: 'user',
-          modelName: '你'
-        })
-        showToast('你的观点已加入讨论', 'success')
-        dispatch({ type: 'SET_INPUT', value: '' })
-        return
-      }
 
       const enabledModels = state.models.filter(m => m.enabled)
       if (enabledModels.length === 0) {
@@ -556,6 +545,20 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
 
       topicRef.current = topic
       void runDiscussion(state.simulate, token)
+    }
+
+    const interject = () => {
+      const topic = state.inputText.trim()
+      if (!topic) return
+      pushMessage({
+        id: genId(),
+        role: 'user',
+        content: topic,
+        modelId: 'user',
+        modelName: '你'
+      })
+      showToast('你的观点已加入讨论', 'success')
+      dispatch({ type: 'SET_INPUT', value: '' })
     }
 
     const exportDiscussion = () => {
@@ -599,6 +602,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
       openSettings,
       closeSettings,
       startDiscussion,
+      interject,
       togglePause,
       nextSpeaker,
       resetDiscussion,

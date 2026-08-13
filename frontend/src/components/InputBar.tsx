@@ -7,6 +7,7 @@ export function InputBar() {
     state,
     setInput,
     startDiscussion,
+    interject,
     togglePause,
     nextSpeaker,
     resetDiscussion,
@@ -29,7 +30,8 @@ export function InputBar() {
   const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      startDiscussion()
+      if (state.discussionActive) interject()
+      else startDiscussion()
     }
   }
 
@@ -99,7 +101,7 @@ export function InputBar() {
             />
           </div>
           <button
-            onClick={startDiscussion}
+            onClick={state.discussionActive ? interject : startDiscussion}
             className="btn-glow px-5 py-2.5 rounded-xl text-sm font-600 flex-shrink-0"
             style={{ background: 'var(--accent)', color: '#000' }}
           >
