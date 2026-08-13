@@ -134,7 +134,10 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
 
   const togglePause = useCallback(() => engine.togglePause(), [engine])
   const nextSpeaker = useCallback(() => engine.skip(), [engine])
-  const resetDiscussion = useCallback(() => engine.reset(), [engine])
+  const resetDiscussion = useCallback(() => {
+    dispatch({ type: 'SET_INPUT', value: '' })
+    engine.reset()
+  }, [engine])
 
   const value = useMemo<DiscussionContextValue>(() => {
     const persistModels = () => {

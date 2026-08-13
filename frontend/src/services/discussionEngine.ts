@@ -204,7 +204,8 @@ export class DiscussionEngine {
     priorAiMsgs: Message[],
     isBaseline: boolean,
     simulate: boolean,
-    models: ModelConfig[]
+    models: ModelConfig[],
+    token: string | null
   ): Promise<void> {
     // 第一条 AI 发言作为基准，不带标签
     if (isBaseline) return
@@ -230,6 +231,8 @@ export class DiscussionEngine {
       const ctrl = new AbortController()
       this.abortCtrl = ctrl
       const finalTag = await directStreamAnalysis(model, payload, undefined, 30000, ctrl.signal)
+      // 讨论已被重置/重启：丢弃分析结果，避免对已清空的消息误打标/误提示
+      if (this.token !== token) return
       if (finalTag) {
         this.updateMessage(currentMsg.id, {
           tag: { label: finalTag.label, evidence: finalTag.evidence, analyzer: currentMsg.modelName }
@@ -238,6 +241,8 @@ export class DiscussionEngine {
       }
       // 流式失败，继续走 Jaccard 回退
     }
+
+    if (this.token !== token) return
 
     // 前端 Jaccard 回退
     const fallbackMessages = [
@@ -257,7 +262,11 @@ export class DiscussionEngine {
   private async runDiscussion(config: DiscussionConfig): Promise<void> {
     const token = this.token
     const enabledModels = config.models.filter(m => m.enabled)
-    if (enabledModels.length === 0) return
+    if (enabledModels.length === 0) {
+      // 无启用模型：保持状态一致，直接结束（防御 start() 直接调用）
+      this.endDiscussion()
+      return
+    }
 
     for (let round = 1; round <= config.maxRounds; round++) {
       this.cb.onDispatch({ type: 'SET_CURRENT_ROUND', value: round })
@@ -284,7 +293,7 @@ export class DiscussionEngine {
           const current = aiMsgs[aiMsgs.length - 1]
           const prior = aiMsgs.slice(0, -1)
           const isBaseline = aiMsgs.length === 1
-          await this.streamAnalyzeMessage(current, prior, isBaseline, config.simulate, config.models)
+          await this.streamAnalyzeMessage(current, prior, isBaseline, config.simulate, config.models, token)
         }
 
         await sleep(600)

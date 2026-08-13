@@ -167,4 +167,15 @@ describe('DiscussionEngine', () => {
     expect(streamChat).toHaveBeenCalled()
     expect(directStreamAnalysis).toHaveBeenCalled()
   })
+
+  it('无启用模型：start 后立即 endDiscussion（状态一致）', async () => {
+    const cb = makeCallbacks()
+    const engine = new DiscussionEngine(cb)
+    engine.start(makeConfig({ models: [makeModel({ enabled: false })] }))
+    await sleep(100)
+    const hasDeactivate = cb.onDispatch.mock.calls.some(
+      c => c[0].type === 'SET_DISCUSSION_ACTIVE' && c[0].value === false
+    )
+    expect(hasDeactivate).toBe(true)
+  })
 })
