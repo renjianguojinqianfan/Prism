@@ -61,9 +61,14 @@ export function loadModels(): ModelConfig[] {
   }
   if (saved) {
     try {
-      return JSON.parse(saved) as ModelConfig[]
+      const parsed = JSON.parse(saved)
+      if (Array.isArray(parsed) && parsed.every(m =>
+        m && typeof m.endpoint === 'string' && typeof m.model === 'string'
+      )) {
+        return parsed as ModelConfig[]
+      }
     } catch {
-      return []
+      // 损坏数据，返回空
     }
   }
   return []
@@ -290,7 +295,11 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<DiscussionContextValue>(() => {
     const persistModels = () => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.models))
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state.models))
+      } catch {
+        showToast('配置保存失败，可能存储空间已满', 'error')
+      }
     }
 
     const saveSettings = () => {
@@ -378,8 +387,9 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
           updateMessage(msgId, { content, thinking: false })
           return
         }
-        fullContent = `[调用失败] ${(err as Error).message}`
-        showToast(`${model.name} 调用出错：${(err as Error).message}`, 'error')
+        const errMsg = err instanceof Error ? err.message : String(err)
+        fullContent = `[调用失败] ${errMsg}`
+        showToast(`${model.name} 调用出错：${errMsg}`, 'error')
       }
 
       updateMessage(msgId, { content: fullContent, thinking: false })
@@ -559,7 +569,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
         if (msg.role === 'user') {
           text += `### 主持人\n${msg.content}\n\n`
         } else if (msg.role === 'assistant') {
-          text += `### ${msg.modelName}（第${msg.round}轮）\n${msg.content}\n\n`
+          text += `### ${msg.modelName}${msg.round ? `（第${msg.round}轮）` : ''}\n${msg.content}\n\n`
         }
       })
       text += `---\n*导出于 ${new Date().toLocaleString('zh-CN')}*`
