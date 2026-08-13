@@ -315,7 +315,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
 
       try {
         if (simulate) {
-          const reply = generateSimReply(model.id, topicRef.current, messagesRef.current, round)
+          const reply = generateSimReply(model, topicRef.current, messagesRef.current, round)
           pushMessage({
             id: msgId,
             role: 'assistant',

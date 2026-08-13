@@ -13,6 +13,7 @@ export interface ModelConfig {
   systemPrompt: string
   enabled: boolean
   custom: boolean
+  simulatorId?: string  // 模拟模式下匹配的角色模板（deepseek/kimi/glm/qwen）
 }
 
 export interface MessageTag {

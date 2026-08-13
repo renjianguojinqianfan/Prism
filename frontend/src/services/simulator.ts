@@ -1,7 +1,7 @@
 import type { Message } from '../store/types'
 
 export function generateSimReply(
-  modelId: string,
+  model: { simulatorId?: string },
   topic: string,
   history: Message[],
   round: number
@@ -40,6 +40,6 @@ export function generateSimReply(
     ]
   }
 
-  const pool = templates[modelId] || templates.deepseek
+  const pool = templates[model.simulatorId || 'deepseek'] || templates.deepseek
   return pool[(round - 1) % pool.length]
 }
