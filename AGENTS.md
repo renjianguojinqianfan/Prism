@@ -91,3 +91,17 @@ Git hooks 位于 `.githooks/` 目录（通过 `core.hooksPath` 配置），自�
 - subject 用中文，一句话说清改动
 - 示例：`feat(analyzer): 迁移至前端直连分析`
 - **分批次多次小步提交**：每个逻辑独立的小改动单独一个 commit，不要把多个不相关的修复堆在一个 commit 里
+
+## Agent skills
+
+### Issue tracker
+
+Issues 与 spec 存在 GitHub Issues，用 `gh` CLI 操作。见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+五个规范 triage 角色标签（needs-triage / needs-info / ready-for-agent / ready-for-human / wontfix）。见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+Single-context：根 `CONTEXT.md` + `docs/adr/`。见 `docs/agents/domain.md`。
