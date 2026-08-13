@@ -184,7 +184,8 @@ export async function directStreamAnalysis(
   model: { endpoint: string; apiKey: string; model: string },
   payload: DirectStreamAnalysisPayload,
   onDelta?: (delta: string) => void,
-  timeoutMs = 30000
+  timeoutMs = 30000,
+  externalSignal?: AbortSignal
 ): Promise<{ label: 'consensus' | 'divergence' | 'neutral'; evidence: string } | null> {
   const prompt = buildAnalyzerPrompt(
     payload.topic,
@@ -195,6 +196,11 @@ export async function directStreamAnalysis(
   try {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+    const onExternalAbort = () => ctrl.abort()
+    if (externalSignal) {
+      if (externalSignal.aborted) ctrl.abort()
+      else externalSignal.addEventListener('abort', onExternalAbort, { once: true })
+    }
     try {
       const response = await fetch(model.endpoint, {
         method: 'POST',
@@ -245,8 +251,12 @@ export async function directStreamAnalysis(
       return parseLabelJson(fullContent)
     } finally {
       clearTimeout(timer)
+      externalSignal?.removeEventListener('abort', onExternalAbort)
     }
-  } catch {
+  } catch (err) {
+    if (err instanceof Error && err.name !== 'AbortError') {
+      console.error('[directStreamAnalysis] 分析失败:', err.message)
+    }
     return null
   }
 }

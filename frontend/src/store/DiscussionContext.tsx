@@ -412,7 +412,9 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
             content: m.content,
           })),
         }
-        const finalTag = await directStreamAnalysis(model, payload)
+        const ctrl = new AbortController()
+        controlRef.current.abortController = ctrl
+        const finalTag = await directStreamAnalysis(model, payload, undefined, 30000, ctrl.signal)
         if (finalTag) {
           updateMessage(currentMsg.id, {
             tag: { label: finalTag.label, evidence: finalTag.evidence, analyzer: currentMsg.modelName }
