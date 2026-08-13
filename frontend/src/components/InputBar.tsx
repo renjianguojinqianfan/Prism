@@ -115,7 +115,7 @@ export function InputBar() {
               value={state.maxRounds}
               min={1}
               max={10}
-              onChange={e => setMaxRounds(parseInt(e.target.value) || 2)}
+              onChange={e => setMaxRounds(Math.min(Math.max(parseInt(e.target.value) || 1, 1), 10))}
               className="w-12 px-2 py-1 rounded-md text-xs text-center input-glow border border-[var(--border)]"
               style={{ background: 'var(--card)', color: 'var(--fg)' }}
             />
