@@ -1224,17 +1224,17 @@ function renderModelConfigs() {
             <div class="space-y-2">
                 <div>
                     <label class="text-[10px] font-500 mb-1 block" style="color:var(--muted);">API 端点</label>
-                    <input type="text" value="${m.endpoint}" onchange="models[${idx}].endpoint=this.value" 
+                    <input type="text" value="${escapeHtml(m.endpoint)}" onchange="models[${idx}].endpoint=this.value" 
                         class="w-full px-3 py-1.5 rounded-lg text-xs input-glow border border-[var(--border)]" style="background:var(--bg);color:var(--fg);">
                 </div>
                 <div>
                     <label class="text-[10px] font-500 mb-1 block" style="color:var(--muted);">模型名称</label>
-                    <input type="text" value="${m.model}" onchange="models[${idx}].model=this.value" 
+                    <input type="text" value="${escapeHtml(m.model)}" onchange="models[${idx}].model=this.value" 
                         class="w-full px-3 py-1.5 rounded-lg text-xs input-glow border border-[var(--border)]" style="background:var(--bg);color:var(--fg);">
                 </div>
                 <div>
                     <label class="text-[10px] font-500 mb-1 block" style="color:var(--muted);">API Key</label>
-                    <input type="password" value="${m.apiKey}" onchange="models[${idx}].apiKey=this.value" placeholder="sk-..."
+                    <input type="password" value="${escapeHtml(m.apiKey)}" onchange="models[${idx}].apiKey=this.value" placeholder="sk-..."
                         class="w-full px-3 py-1.5 rounded-lg text-xs input-glow border border-[var(--border)]" style="background:var(--bg);color:var(--fg);">
                 </div>
                 <div>
@@ -1363,13 +1363,13 @@ function renderMarkdown(text) {
                 renderer: {
                     link(href, title, text) {
                         if (href && !/^(https?:|mailto:|tel:)/i.test(href)) href = '';
-                        const titleAttr = title ? ` title="${title}"` : '';
+                        const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
                         return `<a href="${escapeHtml(href)}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
                     },
                     image(href, title, text) {
                         if (href && !/^https?:/i.test(href)) return '';
-                        const titleAttr = title ? ` title="${title}"` : '';
-                        return `<img src="${escapeHtml(href)}" alt="${text}"${titleAttr} />`;
+                        const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
+                        return `<img src="${escapeHtml(href)}" alt="${escapeHtml(text)}"${titleAttr} />`;
                     }
                 }
             });
@@ -1431,7 +1431,10 @@ function showToast(message, type = 'info') {
     const toast = document.createElement('div');
     toast.className = 'toast-in flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-500 backdrop-blur-md';
     toast.style.cssText = `background:${c.bg};border:1px solid ${c.border}40;color:${c.color};`;
-    toast.innerHTML = `<i class="fas ${c.icon}"></i><span>${message}</span>`;
+    toast.innerHTML = `<i class="fas ${c.icon}"></i>`;
+    const msgSpan = document.createElement('span');
+    msgSpan.textContent = message;
+    toast.appendChild(msgSpan);
     container.appendChild(toast);
 
     setTimeout(() => {
