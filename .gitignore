@@ -45,3 +45,15 @@ venv/
 
 # Private planning docs (not for Git)
 docs/roadmap.md
+
+# Tool caches (regenerated on each run)
+.mimosa/
+frontend/.mimosa/
+.workbuddy/
+
+# Backend removed from repo (590397d); ignore any leftover cache dirs
+backend/
+
+# Competition private docs (not for Git)
+/参赛帖*.md
+/复核申请邮件*.md
