@@ -1,4 +1,4 @@
-import { useDiscussion } from '../store/DiscussionContext'
+import { memo } from 'react'
 import type { Message, TagLabel } from '../store/types'
 import { renderMarkdown } from '../utils/markdown'
 import { escapeHtml } from '../utils/escape'
@@ -9,9 +9,14 @@ const TAG_TEXT: Record<TagLabel, string> = {
   neutral: '中立 ·'
 }
 
-export function MessageBubble({ msg }: { msg: Message }) {
-  const { state } = useDiscussion()
+interface MessageBubbleProps {
+  msg: Message
+  modelColor?: string
+  modelIcon?: string
+  modelName?: string
+}
 
+function MessageBubbleImpl({ msg, modelColor, modelIcon, modelName }: MessageBubbleProps) {
   if (msg.role === 'system') {
     return (
       <div className="msg-enter flex justify-center my-4">
@@ -39,10 +44,9 @@ export function MessageBubble({ msg }: { msg: Message }) {
     )
   }
 
-  const model = state.models.find(m => m.id === msg.modelId)
-  const modelColor = model?.color || 'var(--accent)'
-  const modelIcon = model?.icon || 'fa-robot'
-  const modelName = model?.name || msg.modelName || 'Unknown'
+  const color = modelColor || 'var(--accent)'
+  const icon = modelIcon || 'fa-robot'
+  const name = modelName || 'Unknown'
 
   const contentHtml = msg.thinking
     ? escapeHtml(msg.content) + '<span class="typing-cursor"></span>'
@@ -52,14 +56,14 @@ export function MessageBubble({ msg }: { msg: Message }) {
     <div className="msg-enter flex gap-3 mb-4">
       <div
         className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center mt-0.5"
-        style={{ background: `${modelColor}18`, color: modelColor }}
+        style={{ background: `${color}18`, color }}
       >
-        <i className={`fas ${modelIcon} text-xs`}></i>
+        <i className={`fas ${icon} text-xs`}></i>
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs font-600" style={{ color: modelColor }}>
-            {modelName}
+          <span className="text-xs font-600" style={{ color }}>
+            {name}
           </span>
           <span className="text-[10px]" style={{ color: 'var(--muted)' }}>
             {msg.round ? `第${msg.round}轮` : ''}
@@ -96,3 +100,5 @@ export function MessageBubble({ msg }: { msg: Message }) {
     </div>
   )
 }
+
+export const MessageBubble = memo(MessageBubbleImpl)

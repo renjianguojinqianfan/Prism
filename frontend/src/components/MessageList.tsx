@@ -62,9 +62,20 @@ export function MessageList() {
     <main className="flex-1 overflow-hidden flex flex-col">
       <div ref={areaRef} className="flex-1 overflow-y-auto px-4 md:px-6 py-4">
         <div className="max-w-6xl mx-auto">
-          {state.messages.map(msg => (
-            <MessageBubble key={msg.id} msg={msg} />
-          ))}
+          {state.messages.map(msg => {
+            const model = msg.modelId
+              ? state.models.find(m => m.id === msg.modelId)
+              : undefined
+            return (
+              <MessageBubble
+                key={msg.id}
+                msg={msg}
+                modelColor={model?.color}
+                modelIcon={model?.icon}
+                modelName={model?.name || msg.modelName}
+              />
+            )
+          })}
         </div>
       </div>
     </main>
