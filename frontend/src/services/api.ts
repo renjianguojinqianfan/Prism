@@ -69,29 +69,33 @@ export async function streamChat(
   let buffer = ''
   let fullContent = ''
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() || ''
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (trimmed.startsWith('data: ')) {
-        const data = trimmed.slice(6)
-        if (data === '[DONE]') continue
-        try {
-          const json = JSON.parse(data)
-          const delta: string = json.choices?.[0]?.delta?.content || ''
-          if (delta) {
-            fullContent += delta
-            onDelta(delta, fullContent)
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (trimmed.startsWith('data: ')) {
+          const data = trimmed.slice(6)
+          if (data === '[DONE]') continue
+          try {
+            const json = JSON.parse(data)
+            const delta: string = json.choices?.[0]?.delta?.content || ''
+            if (delta) {
+              fullContent += delta
+              onDelta(delta, fullContent)
+            }
+          } catch {
+            /* 忽略解析错误 */
           }
-        } catch {
-          /* 忽略解析错误 */
         }
       }
     }
+  } finally {
+    reader.cancel().catch(() => {})
   }
   return fullContent
 }

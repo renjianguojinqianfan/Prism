@@ -319,6 +319,7 @@ export function DiscussionProvider({ children }: { children: ReactNode }) {
     }
 
     const generateResponse = async (model: ModelConfig, round: number, simulate: boolean, token: string) => {
+      controlRef.current.skipRequested = false
       const msgId = genId()
       let fullContent = ''
 
