@@ -17,7 +17,7 @@ export function RoleBar() {
                 key={m.id}
                 className={`role-card flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--border)] flex-shrink-0 ${speaking ? 'active' : ''}`}
                 style={{ background: 'var(--card)' }}
-                onClick={() => toggleModelEnabled(m.id)}
+                onClick={() => { if (!state.discussionActive) toggleModelEnabled(m.id) }}
               >
                 <div
                   className={`relative w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${speaking ? 'speaking-pulse' : ''}`}
