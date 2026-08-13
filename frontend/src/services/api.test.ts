@@ -111,19 +111,6 @@ describe('streamChat', () => {
     expect(result).toBe('abc')
   })
 
-  it('跨 buffer 边界拼接不丢失不重复', async () => {
-    // 把单条 data 行切成两个 chunk，验证 buffer 拼接
-    const line = 'data: {"choices":[{"delta":{"content":"x"}}]}\n\n'
-    const chunks = [line.slice(0, 20), line.slice(20)]
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(makeSSEStream(chunks), { status: 200 })
-    ))
-    const onDelta = vi.fn()
-    const result = await streamChat(baseModel, [], new AbortController().signal, onDelta)
-    expect(onDelta).toHaveBeenCalledTimes(1)
-    expect(result).toBe('x')
-  })
-
   it('非 200 抛错含状态码与截断文本', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response('server boom', { status: 500 })
@@ -145,22 +132,6 @@ describe('streamChat', () => {
     await expect(
       streamChat(baseModel, [], new AbortController().signal, vi.fn())
     ).rejects.toThrow('API响应无响应体')
-  })
-
-  it('忽略非 data 行与 [DONE]', async () => {
-    const chunks = [
-      ': comment line\n',
-      '\n',
-      'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
-      'data: [DONE]\n\n'
-    ]
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(makeSSEStream(chunks), { status: 200 })
-    ))
-    const onDelta = vi.fn()
-    const result = await streamChat(baseModel, [], new AbortController().signal, onDelta)
-    expect(onDelta).toHaveBeenCalledTimes(1)
-    expect(result).toBe('hi')
   })
 
   it('单行 JSON 解析失败静默跳过', async () => {

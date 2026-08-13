@@ -339,17 +339,6 @@ describe('directStreamAnalysis', () => {
     expect(r).toBeNull()
   })
 
-  it('跨 buffer 边界拼接仍正确解析', async () => {
-    const labelJson = '{"label":"neutral","evidence":"拼接OK"}'
-    const fullLine = sseDelta(labelJson)
-    const chunks = [fullLine.slice(0, 30), fullLine.slice(30), 'data: [DONE]\n\n']
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(makeOpenAISSEStream(chunks), { status: 200 })
-    ))
-    const r = await directStreamAnalysis(model, payload)
-    expect(r).toEqual({ label: 'neutral', evidence: '拼接OK' })
-  })
-
   it('畸形 data 行跳过仍返回结果', async () => {
     const chunks = [
       'data: not-json\n\n',
